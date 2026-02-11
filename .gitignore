@@ -1,2 +1,61 @@
+*.pyc
+# Modelos pesados (200MB+)
+models/
+*.pt
+*.pth
+*.index
+
+# Archivos temporales de audio
+*.wav
+*.mp3
+*.temp
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.logmodels/
+*.pt
+*.pth
+*.index
+
+# Modelos pesados
+models/
+voices/
+*.pt
+*.pth
+*.index
+
+# Audio temporal
+*.wav
+*.mp3
+
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store

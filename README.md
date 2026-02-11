@@ -8,7 +8,7 @@ Si solo quieres **usar el proyecto**, ve a los releases y descarga el ejecutable
 
 ## Requisitos del Sistema
 
-- **Python 3.11.9** (recomendado)
+- **Python 3.10.11** (recomendado)
 - **Chocolatey** (para instalar dependencias del sistema)
 - Conexión a internet (edge-tts usa servicios en línea de Microsoft)
 
@@ -35,7 +35,7 @@ choco install ffmpeg
 En el directorio del proyecto:
 
 ```bash
-python3.11 -m venv .venv
+python3.10 -m venv .venv
 .venv\Scripts\activate
 ```
 
@@ -44,7 +44,11 @@ python3.11 -m venv .venv
 Con el entorno virtual activado:
 
 ```bash
-pip install PySide6 sounddevice numpy scipy pydub edge-tts
+pip install PySide6 sounddevice numpy scipy pydub edge-tts soundfile librosa
+pip install  praat-parselmouth pyworld torchcrepe faiss-cpu python-dotenv av
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 (para GPU NVIDIA con CUDA 12.4)
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 (para GPU NVIDIA con CUDA 12.8 esto es experimental y puede ser inestable)
+pip install git+https://github.com/Tps-F/fairseq.git@main (Como administrador)
 ```
 
 ---

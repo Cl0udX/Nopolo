@@ -1,43 +1,30 @@
 import asyncio
 import edge_tts
-import sounddevice as sd
-import numpy as np
 import tempfile
 import os
 from pydub import AudioSegment
 
 class TTSEngine:
     def __init__(self):
-        self.voice = "es-MX-JorgeNeural"  # Voz masculina mexicana natural
-        print("✅ Usando edge-tts (Microsoft Azure)")
-        
-    def synthesize(self, text):
-        asyncio.run(self._generate(text))
-        return None
+        self.voice = "es-MX-JorgeNeural"
+        print("✅ Usando edge-tts")
 
-    async def _generate(self, text):
+    def synthesize(self, text) -> str:
+        return asyncio.run(self._generate(text))
+
+    async def _generate(self, text) -> str:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as mp3_tmp:
+            mp3_path = mp3_tmp.name
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_tmp:
+            wav_path = wav_tmp.name
+
         communicate = edge_tts.Communicate(text, self.voice)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-            tmp_path = tmp.name
-        
-        await communicate.save(tmp_path)
-        
-        # Convertir MP3 a WAV usando pydub
-        audio = AudioSegment.from_mp3(tmp_path)
-        wav_data = np.array(audio.get_array_of_samples())
-        
-        # Convertir a float y normalizar
-        if audio.sample_width == 2:  # 16-bit
-            wav_data = wav_data.astype(np.float32) / 32768.0
-        
-        # Si es estéreo, convertir a mono
-        if audio.channels == 2:
-            wav_data = wav_data.reshape((-1, 2)).mean(axis=1)
-        
-        sd.play(wav_data, samplerate=audio.frame_rate)
-        sd.wait()
-        
-        os.unlink(tmp_path)
+        await communicate.save(mp3_path)
 
-    def play(self, wav):
-        pass  # No se usa con edge-tts
+        audio = AudioSegment.from_mp3(mp3_path)
+        audio = audio.set_channels(1).set_frame_rate(44100)
+        audio.export(wav_path, format="wav")
+
+        os.unlink(mp3_path)
+        return wav_path

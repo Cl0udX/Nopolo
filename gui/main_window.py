@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton
 from core.tts_engine import TTSEngine
+from core.rvc_engine import RVCEngine
 from core.audio_queue import AudioQueue
 import sys
 
@@ -17,8 +18,12 @@ class MainWindow(QWidget):
         layout.addWidget(self.button)
         self.setLayout(layout)
 
+        # ✅ Inicializar engines
         self.tts_engine = TTSEngine()
-        self.audio_queue = AudioQueue(self.tts_engine)
+        self.rvc_engine = RVCEngine()
+
+        # ✅ Pasar ambos engines a AudioQueue
+        self.audio_queue = AudioQueue(self.tts_engine, self.rvc_engine)
 
         self.button.clicked.connect(self.play_text)
 
