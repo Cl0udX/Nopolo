@@ -1,47 +1,43 @@
-from TTS.api import TTS
+import asyncio
+import edge_tts
 import sounddevice as sd
 import numpy as np
+import tempfile
 import os
-import torch
+from pydub import AudioSegment
 
 class TTSEngine:
     def __init__(self):
-        self.tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2", progress_bar=False, gpu=False)
-        self.speaker_wav = "assets/speech.wav"
+        self.voice = "es-MX-JorgeNeural"  # Voz masculina mexicana natural
+        print("✅ Usando edge-tts (Microsoft Azure)")
         
-        # 🔥 Calcular embeddings una sola vez
-        print("Calculando embeddings del speaker...")
-        self.gpt_cond_latent, self.speaker_embedding = self.tts.synthesizer.tts_model.get_conditioning_latents(
-            audio_path=[self.speaker_wav]
-        )
-        print("Embeddings listos.")
-
     def synthesize(self, text):
-        # Usar el método de bajo nivel del modelo directamente
-        wav = self.tts.synthesizer.tts_model.inference(
-            text=text,
-            language="es",
-            gpt_cond_latent=self.gpt_cond_latent,
-            speaker_embedding=self.speaker_embedding,
-            temperature=0.7,
-            length_penalty=1.0,
-            repetition_penalty=5.0,
-            top_k=50,
-            top_p=0.85,
-        )
+        asyncio.run(self._generate(text))
+        return None
+
+    async def _generate(self, text):
+        communicate = edge_tts.Communicate(text, self.voice)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+            tmp_path = tmp.name
         
-        # Convertir de tensor a numpy si es necesario
-        if isinstance(wav, torch.Tensor):
-            wav = wav.cpu().numpy()
+        await communicate.save(tmp_path)
         
-        return wav
+        # Convertir MP3 a WAV usando pydub
+        audio = AudioSegment.from_mp3(tmp_path)
+        wav_data = np.array(audio.get_array_of_samples())
+        
+        # Convertir a float y normalizar
+        if audio.sample_width == 2:  # 16-bit
+            wav_data = wav_data.astype(np.float32) / 32768.0
+        
+        # Si es estéreo, convertir a mono
+        if audio.channels == 2:
+            wav_data = wav_data.reshape((-1, 2)).mean(axis=1)
+        
+        sd.play(wav_data, samplerate=audio.frame_rate)
+        sd.wait()
+        
+        os.unlink(tmp_path)
 
     def play(self, wav):
-        if isinstance(wav, list):
-            wav = np.array(wav)
-        if isinstance(wav, dict) and 'wav' in wav:
-            wav = wav['wav']
-        if wav.ndim > 1:
-            wav = wav[:,0]
-        sd.play(wav, samplerate=24000)
-        sd.wait()
+        pass  # No se usa con edge-tts
