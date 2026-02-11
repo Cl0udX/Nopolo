@@ -4,6 +4,122 @@ El proyecto actualmente está hecho en Windows, aunque se puede adaptar a otros 
 
 Si solo quieres **usar el proyecto**, ve a los releases y descarga el ejecutable. Si quieres clonar el proyecto y ejecutarlo desde el código fuente, sigue las instrucciones a continuación.
 
+
+Nopolo es una herramienta open source, local/dedicada, pensada para creadores de contenido que quieren dar vida a sus streams, videos o bots mediante síntesis de voz avanzada y conversión de personajes en tiempo real.
+
+El proyecto nace como una alternativa libre a herramientas de pago como Mopolo TTS, ofreciendo un sistema modular, extensible y ejecutado completamente en el equipo del usuario, sin depender de servicios cerrados ni suscripciones.
+
+---
+
+🚀 ¿Qué hace StreamTTS?
+
+StreamTTS permite transformar texto en audio usando voces naturales y luego convertir ese audio a voces de personajes mediante modelos de conversión de voz.
+
+Actualmente el flujo es:
+```
+Texto
+ → TTS (voz natural)
+ → Conversión de voz (RVC)
+ → Reproducción de audio
+```
+
+El objetivo es que cada mensaje pueda reproducirse con múltiples voces, aplicar efectos de sonido, y reaccionar a eventos (por ejemplo, mensajes de chat o alertas de stream).
+
+---
+
+✨ Características
+
+    🔊 Text-to-Speech con voces naturales
+
+    🎭 Conversión de voz a personajes (ej. Homero Simpson)
+
+    🧠 Uso de modelos entrenados (.pth / .index)
+
+    💻 Ejecución completamente local (CPU / GPU)
+
+    ⚡ Aceleración por GPU (CUDA)
+
+    🧩 Arquitectura modular (TTS, RVC, cola de audio)
+
+    🖥️ Interfaz gráfica simple (Qt / PySide6)
+
+    🔓 Open source y extensible
+
+---
+
+🎯 Enfoque del proyecto
+
+StreamTTS está diseñado como una herramienta para creadores de contenido, pero también como una base sólida para:
+
+Bots de streaming
+
+Integración con herramientas como Streamer.bot
+
+Automatización de eventos
+
+Proyectos experimentales de voz
+
+El proyecto se mantiene open source porque actualmente la mayoría de herramientas similares son de pago o limitan fuertemente el uso gratuito.
+
+---
+
+🛠️ Tecnologías usadas
+
+Python 3.10
+
+PySide6 (interfaz gráfica)
+
+edge-tts (síntesis de voz)
+
+RVC (Retrieval-based Voice Conversion)
+
+PyTorch + CUDA
+
+sounddevice / pydub
+
+---
+
+📂 Estructura del proyecto
+```
+StreamTTS/
+├─ main.py
+├─ core/
+│  ├─ tts_engine.py
+│  ├─ rvc_engine.py
+│  ├─ audio_queue.py
+│  └─ audio_player.py
+├─ gui/
+│  └─ main_window.py
+├─ rvc/                  # RVC clonado
+├─ voices/               # Modelos de voz (.pth / .index)
+├─ assets/
+└─ README.md
+```
+---
+🔮 Próximos pasos
+
+Soporte para múltiples voces por mensaje
+
+Sistema de efectos de sonido
+
+Integración directa con Streamer.bot
+
+Configuración avanzada desde la interfaz
+
+Optimización de latencia
+
+Soporte para Linux
+
+---
+
+⚠️ Estado del proyecto
+
+Este proyecto se encuentra en desarrollo activo.
+Algunas partes pueden cambiar y no todo está optimizado aún.
+
+Si quieres contribuir, probar o proponer ideas, eres bienvenido.
+
+
 ---
 
 ## Requisitos del Sistema
