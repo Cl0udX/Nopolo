@@ -125,25 +125,34 @@ Si quieres contribuir, probar o proponer ideas, eres bienvenido.
 ## Requisitos del Sistema
 
 - **Python 3.10.11** (recomendado)
-- **Chocolatey** (para instalar dependencias del sistema)
+- **Chocolatey** (para instalar dependencias del sistema WIN)
+- **Homebrew** (para instalar dependencias del sistema macOS)
 - Conexión a internet (edge-tts usa servicios en línea de Microsoft)
 
 ---
 
 ## Instalación
 
-### 1. Instalar Chocolatey
+### 1. Instalar Chocolatey o Homebrew
 
 Ejecuta PowerShell como **administrador** y sigue las instrucciones en:
 
 https://chocolatey.org/install
+
+O si estás en macOS, instala Homebrew siguiendo las instrucciones en:
+
+https://brew.sh/
+
 
 ### 2. Instalar FFmpeg
 
 En la misma consola de PowerShell (como administrador):
 
 ```powershell
+# Windows
 choco install ffmpeg
+# O en macOS:
+brew install ffmpeg
 ```
 
 ### 3. Crear Entorno Virtual
@@ -162,8 +171,12 @@ Con el entorno virtual activado:
 ```bash
 pip install PySide6 sounddevice numpy scipy pydub edge-tts soundfile librosa
 pip install  praat-parselmouth pyworld torchcrepe faiss-cpu python-dotenv av
+-- Nvidia
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 (para GPU NVIDIA con CUDA 12.4)
 pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 (para GPU NVIDIA con CUDA 12.8 esto es experimental y puede ser inestable)
+-- Mac o sin GPU
+pip install torch torchvision torchaudio
+
 pip install git+https://github.com/Tps-F/fairseq.git@main (Como administrador)
 ```
 
@@ -196,6 +209,8 @@ Si prefieres usar **Coqui TTS** con clonación de voz (offline, más lento):
 1. **eSpeak-NG:**
    ```powershell
    choco install espeak-ng
+   o
+   brew install espeak-ng
    ```
 
 2. **Microsoft Visual C++ Build Tools:**

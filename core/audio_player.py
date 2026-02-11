@@ -1,5 +1,6 @@
 import sounddevice as sd
 import numpy as np
+import platform
 
 def play_wav(wav_tuple):
     """
@@ -13,6 +14,10 @@ def play_wav(wav_tuple):
         # Retrocompatibilidad si recibe path
         import soundfile as sf
         data, sr = sf.read(wav_tuple, dtype="float32")
+    
+    # Fix para macOS: asegurar que el audio sea mono o estéreo correctamente
+    if len(data.shape) == 1:
+        data = data.reshape(-1, 1)
     
     sd.play(data, sr)
     sd.wait()
