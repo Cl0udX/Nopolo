@@ -1,6 +1,5 @@
 *.pyc
 # Modelos pesados (200MB+)
-models/
 *.pt
 *.pth
 *.index
@@ -30,14 +29,7 @@ env/
 .DS_Store
 Thumbs.db
 
-# Logs
-*.logmodels/
-*.pt
-*.pth
-*.index
-
 # Modelos pesados
-models/
 voices/
 *.pt
 *.pth
@@ -59,3 +51,5 @@ venv/
 
 # Sistema
 .DS_Store
+
+config/voices.json
