@@ -12,10 +12,16 @@ import sys
 
 
 class MainWindow(QWidget):
-    def __init__(self):
+    def __init__(self, enable_api=False, api_host="0.0.0.0", api_port=8000):
         super().__init__()
         self.setWindowTitle("Nopolo - Voice Cloning TTS")
         self.resize(600, 250)
+        
+        # Configuración de API
+        self.enable_api = enable_api
+        self.api_host = api_host
+        self.api_port = api_port
+        self.api_server = None
         
         # Inicializar VoiceManager
         self.voice_manager = VoiceManager()
@@ -37,10 +43,31 @@ class MainWindow(QWidget):
         
         # Cargar voces en dropdown
         self._load_voices()
+        
+        # Iniciar API si está habilitado
+        if self.enable_api:
+            self._start_api_server()
     
     def _build_ui(self):
         """Construye la interfaz de usuario"""
         main_layout = QVBoxLayout()
+        
+        # --- Sección de API (si está habilitada) ---
+        if self.enable_api:
+            api_group = QGroupBox("🌐 Servidor REST API")
+            api_layout = QHBoxLayout()
+            
+            self.api_status = QLabel(f"⏳ Iniciando en {self.api_host}:{self.api_port}...")
+            self.api_status.setStyleSheet("color: orange;")
+            api_layout.addWidget(self.api_status, 1)
+            
+            self.api_toggle_btn = QPushButton("🛑 Detener")
+            self.api_toggle_btn.clicked.connect(self._toggle_api)
+            self.api_toggle_btn.setEnabled(False)  # Hasta que inicie
+            api_layout.addWidget(self.api_toggle_btn)
+            
+            api_group.setLayout(api_layout)
+            main_layout.addWidget(api_group)
         
         # --- Sección de selección de voz ---
         voice_group = QGroupBox("Configuración de Voz")
@@ -104,6 +131,52 @@ class MainWindow(QWidget):
         main_layout.addStretch()
         
         self.setLayout(main_layout)
+    
+    def _start_api_server(self):
+        """Inicia el servidor REST API"""
+        try:
+            from api.rest_server import TTSAPIServer
+            
+            self.api_server = TTSAPIServer(
+                voice_manager=self.voice_manager,
+                audio_queue=self.audio_queue,
+                host=self.api_host,
+                port=self.api_port
+            )
+            
+            self.api_server.start()
+            
+            # Actualizar UI
+            if hasattr(self, 'api_status'):
+                self.api_status.setText(f"✅ API corriendo en http://{self.api_host}:{self.api_port}")
+                self.api_status.setStyleSheet("color: green;")
+                self.api_toggle_btn.setEnabled(True)
+            
+            print(f"API REST iniciada en http://{self.api_host}:{self.api_port}")
+            print(f"Documentación: http://localhost:{self.api_port}/docs")
+            
+        except ImportError:
+            print("No se pudo importar api.rest_server")
+            print("Instala las dependencias: pip install fastapi uvicorn")
+            if hasattr(self, 'api_status'):
+                self.api_status.setText("❌ Error: Falta instalar FastAPI")
+                self.api_status.setStyleSheet("color: red;")
+        except Exception as e:
+            print(f"Error iniciando API: {e}")
+            if hasattr(self, 'api_status'):
+                self.api_status.setText(f"❌ Error: {e}")
+                self.api_status.setStyleSheet("color: red;")
+    
+    def _toggle_api(self):
+        """Inicia/detiene el servidor API"""
+        if self.api_server and self.api_server.is_running:
+            self.api_server.stop()
+            self.api_status.setText(f"🛑 API detenida")
+            self.api_status.setStyleSheet("color: gray;")
+            self.api_toggle_btn.setText("▶️ Iniciar")
+        else:
+            self._start_api_server()
+            self.api_toggle_btn.setText("🛑 Detener")
     
     def _load_voices(self):
         """Carga las voces disponibles en el dropdown"""
@@ -242,6 +315,13 @@ class MainWindow(QWidget):
         # Agregar a la cola
         self.audio_queue.add(text, profile)
         self.input.clear()
+    
+    def closeEvent(self, event):
+        """Limpieza al cerrar la ventana"""
+        if self.api_server and self.api_server.is_running:
+            print("Deteniendo API Server...")
+            self.api_server.stop()
+        event.accept()
 
 
 if __name__ == "__main__":

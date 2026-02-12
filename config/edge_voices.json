@@ -1,0 +1,131 @@
+{
+  "voices": {
+    "Español México": [
+      {"id": "es-MX-DaliaNeural", "gender": "female"},
+      {"id": "es-MX-JorgeNeural", "gender": "male"}
+    ],
+    "Español España": [
+      {"id": "es-ES-AlvaroNeural", "gender": "male"},
+      {"id": "es-ES-ElviraNeural", "gender": "female"},
+      {"id": "es-ES-XimenaNeural", "gender": "female"}
+    ],
+    "Español Argentina": [
+      {"id": "es-AR-ElenaNeural", "gender": "female"},
+      {"id": "es-AR-TomasNeural", "gender": "male"}
+    ],
+    "Español Colombia": [
+      {"id": "es-CO-GonzaloNeural", "gender": "male"},
+      {"id": "es-CO-SalomeNeural", "gender": "female"}
+    ],
+    "Español Chile": [
+      {"id": "es-CL-CatalinaNeural", "gender": "female"},
+      {"id": "es-CL-LorenzoNeural", "gender": "male"}
+    ],
+    "Español Perú": [
+      {"id": "es-PE-AlexNeural", "gender": "male"},
+      {"id": "es-PE-CamilaNeural", "gender": "female"}
+    ],
+    "Español Bolivia": [
+      {"id": "es-BO-MarceloNeural", "gender": "male"},
+      {"id": "es-BO-SofiaNeural", "gender": "female"}
+    ],
+    "Español Costa Rica": [
+      {"id": "es-CR-JuanNeural", "gender": "male"},
+      {"id": "es-CR-MariaNeural", "gender": "female"}
+    ],
+    "Español Cuba": [
+      {"id": "es-CU-BelkysNeural", "gender": "female"},
+      {"id": "es-CU-ManuelNeural", "gender": "male"}
+    ],
+    "Español Ecuador": [
+      {"id": "es-EC-AndreaNeural", "gender": "female"},
+      {"id": "es-EC-LuisNeural", "gender": "male"}
+    ],
+    "Español Guatemala": [
+      {"id": "es-GT-AndresNeural", "gender": "male"},
+      {"id": "es-GT-MartaNeural", "gender": "female"}
+    ],
+    "Español Honduras": [
+      {"id": "es-HN-CarlosNeural", "gender": "male"},
+      {"id": "es-HN-KarlaNeural", "gender": "female"}
+    ],
+    "Español Nicaragua": [
+      {"id": "es-NI-FedericoNeural", "gender": "male"},
+      {"id": "es-NI-YolandaNeural", "gender": "female"}
+    ],
+    "Español Panamá": [
+      {"id": "es-PA-MargaritaNeural", "gender": "female"},
+      {"id": "es-PA-RobertoNeural", "gender": "male"}
+    ],
+    "Español Paraguay": [
+      {"id": "es-PY-MarioNeural", "gender": "male"},
+      {"id": "es-PY-TaniaNeural", "gender": "female"}
+    ],
+    "Español Puerto Rico": [
+      {"id": "es-PR-KarinaNeural", "gender": "female"},
+      {"id": "es-PR-VictorNeural", "gender": "male"}
+    ],
+    "Español El Salvador": [
+      {"id": "es-SV-LorenaNeural", "gender": "female"},
+      {"id": "es-SV-RodrigoNeural", "gender": "male"}
+    ],
+    "Español USA": [
+      {"id": "es-US-AlonsoNeural", "gender": "male"},
+      {"id": "es-US-PalomaNeural", "gender": "female"}
+    ],
+    "Español Uruguay": [
+      {"id": "es-UY-MateoNeural", "gender": "male"},
+      {"id": "es-UY-ValentinaNeural", "gender": "female"}
+    ],
+    "Español Venezuela": [
+      {"id": "es-VE-PaolaNeural", "gender": "female"},
+      {"id": "es-VE-SebastianNeural", "gender": "male"}
+    ],
+    "Español República Dominicana": [
+      {"id": "es-DO-EmilioNeural", "gender": "male"},
+      {"id": "es-DO-RamonaNeural", "gender": "female"}
+    ],
+    "Español Guinea Ecuatorial": [
+      {"id": "es-GQ-JavierNeural", "gender": "male"},
+      {"id": "es-GQ-TeresaNeural", "gender": "female"}
+    ],
+    "Inglés US": [
+      {"id": "en-US-AvaNeural", "gender": "female"},
+      {"id": "en-US-AndrewNeural", "gender": "male"},
+      {"id": "en-US-EmmaNeural", "gender": "female"},
+      {"id": "en-US-BrianNeural", "gender": "male"},
+      {"id": "en-US-AnaNeural", "gender": "female"},
+      {"id": "en-US-AriaNeural", "gender": "female"},
+      {"id": "en-US-ChristopherNeural", "gender": "male"},
+      {"id": "en-US-EricNeural", "gender": "male"},
+      {"id": "en-US-GuyNeural", "gender": "male"},
+      {"id": "en-US-JennyNeural", "gender": "female"},
+      {"id": "en-US-MichelleNeural", "gender": "female"},
+      {"id": "en-US-RogerNeural", "gender": "male"},
+      {"id": "en-US-SteffanNeural", "gender": "male"}
+    ],
+    "Inglés UK": [
+      {"id": "en-GB-LibbyNeural", "gender": "female"},
+      {"id": "en-GB-MaisieNeural", "gender": "female"},
+      {"id": "en-GB-RyanNeural", "gender": "male"},
+      {"id": "en-GB-SoniaNeural", "gender": "female"},
+      {"id": "en-GB-ThomasNeural", "gender": "male"}
+    ],
+    "Inglés Australia": [
+      {"id": "en-AU-NatashaNeural", "gender": "female"},
+      {"id": "en-AU-WilliamMultilingualNeural", "gender": "male"}
+    ],
+    "Inglés Canadá": [
+      {"id": "en-CA-ClaraNeural", "gender": "female"},
+      {"id": "en-CA-LiamNeural", "gender": "male"}
+    ],
+    "Inglés India": [
+      {"id": "en-IN-NeerjaNeural", "gender": "female"},
+      {"id": "en-IN-PrabhatNeural", "gender": "male"}
+    ],
+    "Inglés Irlanda": [
+      {"id": "en-IE-ConnorNeural", "gender": "male"},
+      {"id": "en-IE-EmilyNeural", "gender": "female"}
+    ]
+  }
+}

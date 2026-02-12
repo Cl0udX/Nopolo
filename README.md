@@ -178,6 +178,8 @@ pip install --pre torch torchvision torchaudio --index-url https://download.pyto
 pip install torch torchvision torchaudio
 
 pip install git+https://github.com/Tps-F/fairseq.git@main (Como administrador)
+
+pip install fastapi uvicorn[standard] pydantic python-dotenv
 ```
 
 ---
