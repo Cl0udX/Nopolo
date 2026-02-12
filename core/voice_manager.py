@@ -61,7 +61,7 @@ class VoiceManager:
             "base_male": base_male,
             "base_female": base_female,
         }
-        self.default_voice_id = "base_male"
+        self.default_voice_id = "base_male"  # Cambiar de "homero" a "base_male"
     
     def add_profile(self, profile: VoiceProfile) -> bool:
         """Agrega un nuevo perfil de voz"""

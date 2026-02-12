@@ -7,6 +7,7 @@ from core.tts_engine import TTSEngine
 from core.rvc_engine import RVCEngine
 from core.audio_queue import AudioQueue
 from core.voice_manager import VoiceManager
+from gui.voice_config_dialog import VoiceConfigDialog
 import sys
 
 
@@ -50,11 +51,12 @@ class MainWindow(QWidget):
         self.voice_combo.currentIndexChanged.connect(self._on_voice_changed)
         voice_layout.addWidget(self.voice_combo, 1)
         
-        self.refresh_btn = QPushButton("🔄")
-        self.refresh_btn.setMaximumWidth(40)
-        self.refresh_btn.setToolTip("Recargar voces")
-        self.refresh_btn.clicked.connect(self._refresh_voices)
-        voice_layout.addWidget(self.refresh_btn)
+        # Botón para agregar nueva voz
+        self.add_voice_btn = QPushButton("➕")
+        self.add_voice_btn.setMaximumWidth(40)
+        self.add_voice_btn.setToolTip("Agregar nueva voz")
+        self.add_voice_btn.clicked.connect(self._add_voice)
+        voice_layout.addWidget(self.add_voice_btn)
         
         voice_group.setLayout(voice_layout)
         main_layout.addWidget(voice_group)
@@ -86,15 +88,15 @@ class MainWindow(QWidget):
         # --- Botones de gestión ---
         manage_layout = QHBoxLayout()
         
+        self.config_btn = QPushButton("⚙️ Configurar Voz")
+        self.config_btn.setToolTip("Editar configuración de la voz actual")
+        self.config_btn.clicked.connect(self._edit_voice)
+        manage_layout.addWidget(self.config_btn)
+        
         self.scan_btn = QPushButton("🔍 Escanear Modelos")
         self.scan_btn.setToolTip("Buscar nuevos modelos .pth en voices/")
         self.scan_btn.clicked.connect(self._scan_models)
         manage_layout.addWidget(self.scan_btn)
-        
-        self.config_btn = QPushButton("⚙️ Configurar Voz")
-        self.config_btn.setToolTip("Abrir configuración de la voz actual")
-        self.config_btn.clicked.connect(self._open_config)
-        manage_layout.addWidget(self.config_btn)
         
         main_layout.addLayout(manage_layout)
         
@@ -105,6 +107,7 @@ class MainWindow(QWidget):
     
     def _load_voices(self):
         """Carga las voces disponibles en el dropdown"""
+        current_id = self.voice_combo.currentData()
         self.voice_combo.clear()
         
         profiles = self.voice_manager.list_profiles(enabled_only=True)
@@ -116,14 +119,19 @@ class MainWindow(QWidget):
             
             self.voice_combo.addItem(display_text, profile.profile_id)
         
-        # Seleccionar por defecto
-        default_id = self.voice_manager.default_voice_id
-        if default_id:
-            index = self.voice_combo.findData(default_id)
+        # Restaurar selección o usar default
+        if current_id:
+            index = self.voice_combo.findData(current_id)
             if index >= 0:
                 self.voice_combo.setCurrentIndex(index)
+        else:
+            default_id = self.voice_manager.default_voice_id
+            if default_id:
+                index = self.voice_combo.findData(default_id)
+                if index >= 0:
+                    self.voice_combo.setCurrentIndex(index)
         
-        print(f"{len(profiles)} voces cargadas en la interfaz")
+        print(f"✅ {len(profiles)} voces cargadas")
     
     def _on_voice_changed(self, index):
         """Callback cuando cambia la voz seleccionada"""
@@ -162,36 +170,64 @@ class MainWindow(QWidget):
                     self.rvc_engine.config.model_id != profile.rvc_config.model_id):
                     self.rvc_engine.load_model(profile.rvc_config)
             except Exception as e:
-                print(f"Error cargando modelo RVC: {e}")
+                print(f"❌ Error cargando modelo RVC: {e}")
     
-    def _refresh_voices(self):
-        """Recarga la lista de voces"""
-        self.voice_manager.load_from_file()
-        self._load_voices()
-        print("🔄 Voces recargadas")
+    def _add_voice(self):
+        """Abre diálogo para agregar nueva voz"""
+        dialog = VoiceConfigDialog(
+            parent=self,
+            profile=None,  # Modo crear
+            voice_manager=self.voice_manager
+        )
+        
+        if dialog.exec():
+            # Voz agregada exitosamente
+            print(f"✅ Voz agregada: {dialog.get_profile().display_name}")
+            self._load_voices()
+            
+            # Seleccionar la nueva voz
+            new_id = dialog.get_profile().profile_id
+            index = self.voice_combo.findData(new_id)
+            if index >= 0:
+                self.voice_combo.setCurrentIndex(index)
+    
+    def _edit_voice(self):
+        """Abre diálogo para editar voz actual"""
+        profile_id = self.voice_combo.currentData()
+        if not profile_id:
+            return
+        
+        profile = self.voice_manager.get_profile(profile_id)
+        if not profile:
+            return
+        
+        dialog = VoiceConfigDialog(
+            parent=self,
+            profile=profile,  # Modo editar
+            voice_manager=self.voice_manager
+        )
+        
+        if dialog.exec():
+            # Voz editada exitosamente
+            print(f"✅ Voz actualizada: {dialog.get_profile().display_name}")
+            self._load_voices()
     
     def _scan_models(self):
         """Escanea y agrega automáticamente nuevos modelos"""
         new_models = self.voice_manager.scan_rvc_models()
         
         if not new_models:
-            print("No se encontraron modelos nuevos")
+            print("✅ No se encontraron modelos nuevos")
             return
         
-        print(f"{len(new_models)} modelos nuevos encontrados")
+        print(f"🔍 {len(new_models)} modelos nuevos encontrados")
         
         for model_path in new_models:
-            # Por ahora, asumimos masculino. Luego podemos agregar diálogo
             profile_id = self.voice_manager.auto_add_rvc_model(model_path, gender="male")
             if profile_id:
-                print(f"{profile_id}")
+                print(f"  ✅ {profile_id}")
         
-        self._refresh_voices()
-    
-    def _open_config(self):
-        """Abre ventana de configuración de la voz actual"""
-        # TODO: Implementar ventana de configuración detallada
-        print("Configuración de voz (próximamente)")
+        self._load_voices()
     
     def play_text(self):
         """Reproduce el texto con la voz seleccionada"""
