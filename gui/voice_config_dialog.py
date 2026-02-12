@@ -349,7 +349,7 @@ class VoiceConfigDialog(QDialog):
             # Buscar .index
             for file in os.listdir(model_dir):
                 if file.endswith('.index') and model_name in file:
-                    print(f"✅ Index auto-detectado: {file}")
+                    print(f"Index auto-detectado: {file}")
                     break
     
     def _load_profile_data(self):
@@ -450,7 +450,7 @@ class VoiceConfigDialog(QDialog):
                 self.temp_tts_engine.update_config(tts_config)
             
             # Sintetizar
-            print("🔊 Probando TTS...")
+            print("Probando TTS...")
             wav_path = self.temp_tts_engine.synthesize(text)
             
             # Reproducir
@@ -485,7 +485,7 @@ class VoiceConfigDialog(QDialog):
             else:
                 self.temp_tts_engine.update_config(tts_config)
             
-            print("🔊 Generando TTS...")
+            print("Generando TTS...")
             wav_path = self.temp_tts_engine.synthesize(text)
             
             # RVC
@@ -500,7 +500,7 @@ class VoiceConfigDialog(QDialog):
             
             self.temp_rvc_engine.load_model(rvc_config)
             
-            print("🎭 Aplicando RVC...")
+            print("Aplicando RVC...")
             converted_audio = self.temp_rvc_engine.convert(wav_path, rvc_config)
             
             # Reproducir

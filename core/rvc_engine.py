@@ -70,12 +70,12 @@ class RVCEngine:
         hubert_path = os.path.join(hubert_dir, "hubert_base.pt")
         
         if os.path.exists(hubert_path):
-            print("✅ Modelo Hubert encontrado")
+            print("Modelo Hubert encontrado")
             return hubert_path
         
         os.makedirs(hubert_dir, exist_ok=True)
         
-        print("📥 Descargando modelo Hubert (tamaño ~200MB)...")
+        print("Descargando modelo Hubert (tamaño ~200MB)...")
         import urllib.request
         url = "https://huggingface.co/lj1995/VoiceConversionWebUI/resolve/main/hubert_base.pt"
         

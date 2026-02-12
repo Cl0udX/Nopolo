@@ -131,7 +131,7 @@ class MainWindow(QWidget):
                 if index >= 0:
                     self.voice_combo.setCurrentIndex(index)
         
-        print(f"✅ {len(profiles)} voces cargadas")
+        print(f"{len(profiles)} voces cargadas")
     
     def _on_voice_changed(self, index):
         """Callback cuando cambia la voz seleccionada"""
@@ -170,7 +170,7 @@ class MainWindow(QWidget):
                     self.rvc_engine.config.model_id != profile.rvc_config.model_id):
                     self.rvc_engine.load_model(profile.rvc_config)
             except Exception as e:
-                print(f"❌ Error cargando modelo RVC: {e}")
+                print(f"Error cargando modelo RVC: {e}")
     
     def _add_voice(self):
         """Abre diálogo para agregar nueva voz"""
@@ -182,7 +182,7 @@ class MainWindow(QWidget):
         
         if dialog.exec():
             # Voz agregada exitosamente
-            print(f"✅ Voz agregada: {dialog.get_profile().display_name}")
+            print(f"Voz agregada: {dialog.get_profile().display_name}")
             self._load_voices()
             
             # Seleccionar la nueva voz
@@ -209,7 +209,7 @@ class MainWindow(QWidget):
         
         if dialog.exec():
             # Voz editada exitosamente
-            print(f"✅ Voz actualizada: {dialog.get_profile().display_name}")
+            print(f"Voz actualizada: {dialog.get_profile().display_name}")
             self._load_voices()
     
     def _scan_models(self):
@@ -217,15 +217,15 @@ class MainWindow(QWidget):
         new_models = self.voice_manager.scan_rvc_models()
         
         if not new_models:
-            print("✅ No se encontraron modelos nuevos")
+            print("No se encontraron modelos nuevos")
             return
         
-        print(f"🔍 {len(new_models)} modelos nuevos encontrados")
+        print(f"{len(new_models)} modelos nuevos encontrados")
         
         for model_path in new_models:
             profile_id = self.voice_manager.auto_add_rvc_model(model_path, gender="male")
             if profile_id:
-                print(f"  ✅ {profile_id}")
+                print(f"{profile_id}")
         
         self._load_voices()
     
