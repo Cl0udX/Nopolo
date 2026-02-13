@@ -1,5 +1,7 @@
 # Nopolo
 
+![Logo](assets/logo.png "Logo del proyecto Nopolo")
+
 El proyecto actualmente está hecho en Windows, aunque se puede adaptar a otros sistemas operativos. Este README se enfoca en la instalación en Windows.
 
 Si solo quieres **usar el proyecto**, ve a los releases y descarga el ejecutable. Si quieres clonar el proyecto y ejecutarlo desde el código fuente, sigue las instrucciones a continuación.

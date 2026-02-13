@@ -54,7 +54,7 @@ public class CPHInline
         }
     }
 
-    // Escapa caracteres especiales para JSON
+    // Escapa caracteres especiales para JSON (Unicode se maneja con UTF-8)
     private string EscapeJson(string text)
     {
         return text
@@ -62,20 +62,25 @@ public class CPHInline
             .Replace("\"", "\\\"")
             .Replace("\n", "\\n")
             .Replace("\r", "\\r")
-            .Replace("\t", "\\t");
+            .Replace("\t", "\\t")
+            .Replace("\b", "\\b")
+            .Replace("\f", "\\f");
     }
 
-    // Envía HTTP POST request
+    // Envía HTTP POST request con soporte completo para UTF-8
     private string SendHttpPost(string host, int port, string path, string jsonBody)
     {
-        string httpRequest = 
+        // Calcular Content-Length en bytes UTF-8 (maneja tildes, emojis, etc.)
+        byte[] bodyBytes = Encoding.UTF8.GetBytes(jsonBody);
+        int contentLength = bodyBytes.Length;
+        
+        string headers = 
             "POST " + path + " HTTP/1.1\r\n" +
             "Host: " + host + ":" + port + "\r\n" +
-            "Content-Type: application/json\r\n" +
-            "Content-Length: " + jsonBody.Length + "\r\n" +
+            "Content-Type: application/json; charset=utf-8\r\n" +
+            "Content-Length: " + contentLength + "\r\n" +
             "Connection: close\r\n" +
-            "\r\n" +
-            jsonBody;
+            "\r\n";
 
         using (TcpClient client = new TcpClient())
         {
@@ -84,8 +89,13 @@ public class CPHInline
             client.Connect(host, port);
 
             NetworkStream stream = client.GetStream();
-            byte[] data = Encoding.UTF8.GetBytes(httpRequest);
-            stream.Write(data, 0, data.Length);
+            
+            // Headers en ASCII
+            byte[] headerBytes = Encoding.ASCII.GetBytes(headers);
+            stream.Write(headerBytes, 0, headerBytes.Length);
+            
+            // Body en UTF-8
+            stream.Write(bodyBytes, 0, bodyBytes.Length);
             stream.Flush();
 
             byte[] buffer = new byte[4096];
