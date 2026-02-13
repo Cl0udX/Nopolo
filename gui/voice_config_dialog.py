@@ -3,17 +3,19 @@ Diálogo de configuración de voces.
 Permite crear nuevas voces o editar existentes.
 """
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
-    QLineEdit, QComboBox, QSlider, QSpinBox, QDoubleSpinBox,
-    QPushButton, QLabel, QFileDialog, QTextEdit, QCheckBox,
-    QTabWidget, QWidget, QMessageBox
+    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QTabWidget, QWidget, QLineEdit, QPushButton, 
+    QComboBox, QLabel, QCheckBox, QSlider, QSpinBox,
+    QFileDialog, QMessageBox, QGroupBox, QTextEdit
 )
 from PySide6.QtCore import Qt
 from core.models import VoiceProfile, EdgeTTSConfig, RVCConfig
+from core.provider_manager import ProviderManager
 from core.edge_voices import get_popular_voices
 from core.tts_engine import TTSEngine
 from core.rvc_engine import RVCEngine
 from core.audio_player import play_wav
+from pathlib import Path
 import os
 
 
@@ -24,6 +26,7 @@ class VoiceConfigDialog(QDialog):
         super().__init__(parent)
         self.profile = profile  # None = modo crear, VoiceProfile = modo editar
         self.voice_manager = voice_manager
+        self.provider_manager = ProviderManager()
         self.is_edit_mode = profile is not None
         
         # Engines temporales para pruebas
@@ -118,31 +121,44 @@ class VoiceConfigDialog(QDialog):
     
     def _build_tts_tab(self):
         """Construye el tab de configuración TTS"""
-        tab = QWidget()
-        layout = QVBoxLayout()
+        widget = QWidget()
+        main_layout = QVBoxLayout()  # ← Layout principal para poder usar addStretch
         
-        # Selector de voz
-        voice_group = QGroupBox("Selección de Voz Base")
-        voice_layout = QVBoxLayout()
+        # ========== Selector de Engine TTS ==========
+        engine_group = QGroupBox("Engine TTS")
+        engine_layout = QFormLayout()
         
-        # ComboBox organizado por categorías
+        self.engine_combo = QComboBox()
+        self.engine_combo.currentTextChanged.connect(self._on_engine_changed)
+        
+        # Cargar engines disponibles
+        providers = self.provider_manager.get_enabled_providers()
+        for provider in providers:
+            icon = provider.get("icon", "🔊")
+            name = provider["name"]
+            ptype = provider["type"]
+            
+            self.engine_combo.addItem(f"{icon} {name}", ptype)
+        
+        engine_layout.addRow("Engine:", self.engine_combo)
+        engine_group.setLayout(engine_layout)
+        main_layout.addWidget(engine_group)
+        
+        # ========== Selector de Voz ==========
+        voice_group = QGroupBox("Selección de Voz")
+        voice_layout = QFormLayout()
+        
         self.voice_combo = QComboBox()
         self.voice_combo.currentTextChanged.connect(self._on_tts_voice_changed)
+        voice_layout.addRow("Voz:", self.voice_combo)
         
-        # Cargar voces organizadas
-        popular_voices = get_popular_voices()
-        for category, voices in popular_voices.items():
-            self.voice_combo.addItem(f"── {category} ──", None)  # Separador
-            for voice_id in voices:
-                display_name = voice_id.split('-')[-1].replace('Neural', '')
-                self.voice_combo.addItem(f"   {display_name}", voice_id)
-        
-        voice_layout.addWidget(QLabel("Voz:"))
-        voice_layout.addWidget(self.voice_combo)
         voice_group.setLayout(voice_layout)
-        layout.addWidget(voice_group)
+        main_layout.addWidget(voice_group)
         
-        # Configuración de parámetros
+        # Cargar voces del engine por defecto
+        self._load_voices_for_engine(self.engine_combo.currentData())
+
+        # ========== Configuración de parámetros ==========
         config_group = QGroupBox("Parámetros de TTS")
         config_layout = QFormLayout()
         
@@ -190,11 +206,11 @@ class VoiceConfigDialog(QDialog):
         config_layout.addRow("Volumen:", volume_layout)
         
         config_group.setLayout(config_layout)
-        layout.addWidget(config_group)
+        main_layout.addWidget(config_group)
         
-        layout.addStretch()
-        tab.setLayout(layout)
-        return tab
+        main_layout.addStretch()
+        widget.setLayout(main_layout)
+        return widget
     
     def _build_rvc_tab(self):
         """Construye el tab de configuración RVC"""
@@ -225,6 +241,28 @@ class VoiceConfigDialog(QDialog):
         
         model_group.setLayout(model_layout)
         rvc_layout.addWidget(model_group)
+        
+        # Selector de archivo .index (opcional)
+        index_group = QGroupBox("Archivo Index (Opcional)")
+        index_layout = QHBoxLayout()
+        
+        self.index_path_input = QLineEdit()
+        self.index_path_input.setPlaceholderText("Auto-detectado o selecciona manualmente...")
+        self.index_path_input.setReadOnly(True)
+        index_layout.addWidget(self.index_path_input)
+        
+        self.browse_index_btn = QPushButton("📁 Buscar")
+        self.browse_index_btn.clicked.connect(self._browse_index)
+        index_layout.addWidget(self.browse_index_btn)
+        
+        self.clear_index_btn = QPushButton("🗑️")
+        self.clear_index_btn.setMaximumWidth(40)
+        self.clear_index_btn.setToolTip("Limpiar index")
+        self.clear_index_btn.clicked.connect(lambda: self.index_path_input.clear())
+        index_layout.addWidget(self.clear_index_btn)
+        
+        index_group.setLayout(index_layout)
+        rvc_layout.addWidget(index_group)
         
         # Configuración de parámetros RVC
         rvc_params_group = QGroupBox("Parámetros de Conversión")
@@ -346,11 +384,32 @@ class VoiceConfigDialog(QDialog):
             model_dir = os.path.dirname(file_path)
             model_name = os.path.splitext(os.path.basename(file_path))[0]
             
-            # Buscar .index
+            # Buscar .index en el mismo directorio
+            index_found = False
             for file in os.listdir(model_dir):
-                if file.endswith('.index') and model_name in file:
-                    print(f"Index auto-detectado: {file}")
+                if file.endswith('.index'):
+                    index_path = os.path.join(model_dir, file)
+                    self.index_path_input.setText(index_path)
+                    print(f"✅ Index auto-detectado: {file}")
+                    index_found = True
                     break
+            
+            if not index_found:
+                self.index_path_input.clear()
+                print("ℹ️ No se encontró archivo .index (opcional)")
+    
+    def _browse_index(self):
+        """Abre diálogo para seleccionar archivo .index"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar Archivo Index",
+            "voices/",
+            "Index Files (*.index)"
+        )
+        
+        if file_path:
+            self.index_path_input.setText(file_path)
+            print(f"✅ Index seleccionado: {os.path.basename(file_path)}")
     
     def _load_profile_data(self):
         """Carga datos del perfil en modo editar"""
@@ -361,6 +420,28 @@ class VoiceConfigDialog(QDialog):
         self.name_input.setText(self.profile.display_name)
         self.id_input.setText(self.profile.profile_id)
         self.enabled_checkbox.setChecked(self.profile.enabled)
+
+        tts = self.profile.tts_config
+        provider_name = getattr(tts, 'provider_name', 'edge_tts')  # Compatibilidad con configs viejas
+        
+        # Bloquear señales temporalmente para evitar doble carga
+        self.engine_combo.blockSignals(True)
+        
+        # Buscar y seleccionar engine
+        engine_index = self.engine_combo.findData(provider_name)
+        if engine_index >= 0:
+            self.engine_combo.setCurrentIndex(engine_index)
+        
+        # Restaurar señales
+        self.engine_combo.blockSignals(False)
+        
+        # Cargar voces del engine (una sola vez)
+        self._load_voices_for_engine(provider_name)
+        
+        # Buscar y seleccionar la voz
+        index = self.voice_combo.findData(tts.voice_id)
+        if index >= 0:
+            self.voice_combo.setCurrentIndex(index)
         
         # TTS Config
         tts = self.profile.tts_config
@@ -379,6 +460,11 @@ class VoiceConfigDialog(QDialog):
             rvc = self.profile.rvc_config
             
             self.model_path_input.setText(rvc.model_path)
+            
+            # Cargar index path si existe
+            if rvc.index_path:
+                self.index_path_input.setText(rvc.index_path)
+            
             self.pitch_shift_spinbox.setValue(rvc.pitch_shift)
             self.index_rate_slider.setValue(int(rvc.index_rate * 100))
             self.filter_spinbox.setValue(rvc.filter_radius)
@@ -393,23 +479,6 @@ class VoiceConfigDialog(QDialog):
             if gender_index >= 0:
                 self.gender_combo.setCurrentIndex(gender_index)
     
-    def _build_tts_config(self) -> EdgeTTSConfig:
-        """Construye EdgeTTSConfig desde la UI"""
-        voice_id = self.voice_combo.currentData()
-        if not voice_id:  # Es un separador
-            # Buscar siguiente item válido
-            for i in range(self.voice_combo.currentIndex() + 1, self.voice_combo.count()):
-                if self.voice_combo.itemData(i):
-                    voice_id = self.voice_combo.itemData(i)
-                    break
-        
-        return EdgeTTSConfig(
-            voice_id=voice_id or "es-MX-JorgeNeural",
-            speed=self.speed_slider.value() / 100.0,
-            pitch=self.pitch_spinbox.value(),
-            volume=self.volume_slider.value() / 100.0
-        )
-    
     def _build_rvc_config(self) -> RVCConfig:
         """Construye RVCConfig desde la UI"""
         if not self.use_rvc_checkbox.isChecked():
@@ -421,10 +490,14 @@ class VoiceConfigDialog(QDialog):
         
         model_id = os.path.splitext(os.path.basename(model_path))[0]
         
+        # Obtener index path (puede ser None)
+        index_path = self.index_path_input.text() or None
+        
         return RVCConfig(
             model_id=model_id,
             name=self.name_input.text(),
             model_path=model_path,
+            index_path=index_path,  # ← AGREGAR
             pitch_shift=self.pitch_shift_spinbox.value(),
             index_rate=self.index_rate_slider.value() / 100.0,
             filter_radius=self.filter_spinbox.value(),
@@ -553,3 +626,92 @@ class VoiceConfigDialog(QDialog):
     def get_profile(self) -> VoiceProfile:
         """Retorna el perfil creado/editado"""
         return self.profile
+    
+    def _on_engine_changed(self, engine_text):
+        """Callback cuando cambia el engine TTS seleccionado"""
+        engine_type = self.engine_combo.currentData()
+        if not engine_type:
+            return
+        
+        print(f"🔄 Cambiando a engine: {engine_type}")
+        
+        # Recargar voces del nuevo engine
+        self._load_voices_for_engine(engine_type)
+    
+    def _load_voices_for_engine(self, engine_type: str):
+        """Carga voces disponibles del engine seleccionado"""
+        # Verificación de seguridad
+        if not hasattr(self, 'voice_combo') or self.voice_combo is None:
+            return
+        
+        self.voice_combo.clear()
+        
+        try:
+            if engine_type == "edge_tts":
+                # Usar método existente de Edge TTS
+                from core.edge_voices import get_popular_voices
+                voices = get_popular_voices()
+                
+                # voices es un dict {categoria: [voice_ids]}
+                for category, voice_ids in voices.items():
+                    # Agregar separador
+                    self.voice_combo.addItem(f"── {category} ──", None)
+                    self.voice_combo.model().item(self.voice_combo.count() - 1).setEnabled(False)
+                    
+                    # Agregar voces
+                    for voice_id in voice_ids:
+                        # Extraer nombre corto del voice_id
+                        display_name = voice_id.split('-')[-1].replace('Neural', '')
+                        self.voice_combo.addItem(f"   {display_name}", voice_id)
+            
+            elif engine_type == "google_tts":
+                # Obtener voces de Google Cloud TTS
+                from core.tts.google_provider import GoogleTTSProvider, GoogleTTSConfig
+                
+                credentials_path = self.provider_manager.get_provider_credentials("google_tts")
+                config = GoogleTTSConfig(credentials_path=credentials_path)
+                provider = GoogleTTSProvider(config)
+                
+                voices = provider.get_available_voices()
+                
+                # Agrupar por idioma
+                by_language = {}
+                for voice in voices:
+                    lang = voice.get("language", "Unknown")
+                    if lang not in by_language:
+                        by_language[lang] = []
+                    by_language[lang].append(voice)
+                
+                # Agregar al combo
+                for lang, lang_voices in sorted(by_language.items()):
+                    self.voice_combo.addItem(f"── {lang} ──", None)
+                    self.voice_combo.model().item(self.voice_combo.count() - 1).setEnabled(False)
+                    
+                    for voice in lang_voices:
+                        voice_label = f"{voice['name']} ({voice['gender']})"
+                        self.voice_combo.addItem(voice_label, voice['id'])
+        
+        except Exception as e:
+            print(f"❌ Error cargando voces de {engine_type}: {e}")
+            self.voice_combo.addItem("Error cargando voces", None)
+    
+    def _build_tts_config(self) -> EdgeTTSConfig:
+        """Construye EdgeTTSConfig desde la UI"""
+        voice_id = self.voice_combo.currentData()
+        provider_name = self.engine_combo.currentData()
+        
+        if not voice_id:  # Es un separador
+            # Buscar siguiente item válido
+            for i in range(self.voice_combo.currentIndex() + 1, self.voice_combo.count()):
+                if self.voice_combo.itemData(i):
+                    voice_id = self.voice_combo.itemData(i)
+                    break
+        
+        return EdgeTTSConfig(
+            provider_name=provider_name,
+            voice_id=voice_id or "es-MX-JorgeNeural",
+            speed=self.speed_slider.value() / 100.0,
+            pitch=self.pitch_spinbox.value(),
+            volume=self.volume_slider.value() / 100.0
+        )
+    

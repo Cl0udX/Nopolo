@@ -2,7 +2,7 @@
 Configuraciones base para Text-to-Speech engines.
 Cada engine (EdgeTTS, Coqui, etc.) hereda de BaseTTSConfig.
 """
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Optional
 import json
 
@@ -10,7 +10,6 @@ import json
 @dataclass
 class BaseTTSConfig:
     """Configuración base para cualquier TTS engine"""
-    engine_type: str = "base"     # "edge_tts", "coqui_tts", etc.
     voice_id: str = "default"     # ID de la voz (ej: "es-MX-JorgeNeural")
     speed: float = 1.0            # Velocidad (0.5-2.0)
     pitch: int = 0                # Pitch en semitonos (-12 a +12)
@@ -41,7 +40,7 @@ class BaseTTSConfig:
 @dataclass
 class EdgeTTSConfig(BaseTTSConfig):
     """Configuración específica para Edge TTS (Microsoft Azure)"""
-    engine_type: str = "edge_tts"
+    provider_name: str = "edge_tts"  # ← Solo provider_name, sin engine_type
     voice_id: str = "es-MX-JorgeNeural"
     
     # Parámetros específicos de Edge TTS

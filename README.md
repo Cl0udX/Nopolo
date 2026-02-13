@@ -2,14 +2,22 @@
 
 ![Logo](assets/logo.png "Logo del proyecto Nopolo")
 
-El proyecto actualmente está hecho en Windows, aunque se puede adaptar a otros sistemas operativos. Este README se enfoca en la instalación en Windows.
+**Nopolo** es una herramienta open source de síntesis de voz (TTS) con conversión de personajes mediante RVC, diseñada para creadores de contenido que quieren dar vida a sus streams, videos o bots.
 
-Si solo quieres **usar el proyecto**, ve a los releases y descarga el ejecutable. Si quieres clonar el proyecto y ejecutarlo desde el código fuente, sigue las instrucciones a continuación.
+El proyecto funciona **completamente local** en tu equipo, sin depender de servicios cerrados ni suscripciones. Es una alternativa libre a herramientas de pago como Mopolo TTS.
 
+---
 
-Nopolo es una herramienta open source, local/dedicada, pensada para creadores de contenido que quieren dar vida a sus streams, videos o bots mediante síntesis de voz avanzada y conversión de personajes en tiempo real.
+## 🌐 Compatibilidad Multiplataforma
 
-El proyecto nace como una alternativa libre a herramientas de pago como Mopolo TTS, ofreciendo un sistema modular, extensible y ejecutado completamente en el equipo del usuario, sin depender de servicios cerrados ni suscripciones.
+| Sistema | Estado | Device | Método F0 | Notas |
+|---------|--------|--------|-----------|-------|
+| **Windows + NVIDIA** | ✅ Completo | CUDA | RMVPE | Máximo rendimiento |
+| **Linux + NVIDIA** | ✅ Completo | CUDA | RMVPE | Máximo rendimiento |
+| **macOS (M1/M2/M3)** | ✅ Optimizado | CPU | Parselmouth | Estable, ligeramente más lento |
+| **Windows/Linux sin GPU** | ✅ Funcional | CPU | RMVPE | Más lento pero funcional |
+
+> **Nota para usuarios de Mac:** Nopolo detecta automáticamente macOS y ajusta el procesamiento para evitar problemas con MPS. Usa el script `./run_nopolo_gui.sh` para mejor rendimiento.
 
 ---
 
@@ -98,19 +106,16 @@ StreamTTS/
 └─ README.md
 ```
 ---
-🔮 Próximos pasos
+## 🔮 Próximos pasos
 
-Soporte para múltiples voces por mensaje
-
-Sistema de efectos de sonido
-
-Integración directa con Streamer.bot
-
-Configuración avanzada desde la interfaz
-
-Optimización de latencia
-
-Soporte para Linux
+- [x] Soporte multiplataforma (Windows, Linux, macOS)
+- [x] API REST con documentación interactiva
+- [x] Multi-provider TTS (Edge TTS + Google Cloud TTS)
+- [ ] Soporte para múltiples voces por mensaje
+- [ ] Sistema de efectos de sonido
+- [ ] Integración directa con Streamer.bot
+- [ ] Configuración avanzada desde la interfaz
+- [ ] Optimización de latencia
 
 ---
 
@@ -182,6 +187,8 @@ pip install torch torchvision torchaudio
 pip install git+https://github.com/Tps-F/fairseq.git@main (Como administrador)
 
 pip install fastapi uvicorn[standard] pydantic python-dotenv
+
+pip install google-cloud-texttospeech
 ```
 
 ---
@@ -244,6 +251,47 @@ Si prefieres usar **Coqui TTS** con clonación de voz (offline, más lento):
 ### Modelos Recomendados:
 - **Pesado (mejor calidad):** `tts_models/multilingual/multi-dataset/xtts_v2`
 - **Ligero (más rápido):** `tts_models/es/mai/tacotron2-DDC`
+
+---
+
+## 🚀 Ejecución
+
+### Método 1: Scripts de Lanzamiento (Recomendado para Mac)
+
+```bash
+# Solo interfaz gráfica (GUI)
+./run_nopolo_gui.sh
+
+# Solo servidor API REST (sin GUI)
+./run_nopolo_api.sh
+
+# GUI + API Server simultáneamente
+./run_nopolo_full.sh
+```
+
+> **Importante:** Los scripts `.sh` establecen variables de entorno necesarias para Mac. En Windows/Linux puedes usarlos o ejecutar directamente con Python.
+
+### Método 2: Ejecución Directa con Python
+
+```bash
+# Activar entorno virtual primero
+source .venv/bin/activate  # macOS/Linux
+.venv\Scripts\activate     # Windows
+
+# Modos de ejecución:
+python main.py              # Solo GUI
+python main.py --no-gui     # Solo API Server
+python main.py --with-api   # GUI + API Server
+```
+
+### Acceso a la API REST
+
+Cuando ejecutas con API habilitada:
+- **Documentación interactiva:** http://localhost:8000/docs
+- **API alternativa:** http://localhost:8000/redoc
+- **Endpoint ejemplo:** `POST http://localhost:8000/synthesize`
+
+---
 
 ---
 

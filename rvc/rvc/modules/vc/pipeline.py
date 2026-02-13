@@ -38,10 +38,27 @@ def cache_harvest_f0(input_audio_path, fs, f0max, f0min, frame_period):
 
 def change_rms(data1, sr1, data2, sr2, rate):  # 1是输入音频，2是输出音频,rate是2的占比
     # print(data1.max(),data2.max())
-    rms1 = librosa.feature.rms(
-        y=data1, frame_length=sr1 // 2 * 2, hop_length=sr1 // 2
-    )  # 每半秒一个点
-    rms2 = librosa.feature.rms(y=data2, frame_length=sr2 // 2 * 2, hop_length=sr2 // 2)
+    # PATCH: Calcular RMS manualmente sin librosa (evita numba en Mac)
+    import numpy as np
+    
+    # RMS manual para data1
+    frame_length1 = sr1 // 2 * 2
+    hop_length1 = sr1 // 2
+    frames1 = np.lib.stride_tricks.sliding_window_view(
+        np.pad(data1, frame_length1 // 2, mode='reflect'), 
+        frame_length1
+    )[::hop_length1]
+    rms1 = np.sqrt(np.mean(frames1 ** 2, axis=1, keepdims=True)).T
+    
+    # RMS manual para data2
+    frame_length2 = sr2 // 2 * 2
+    hop_length2 = sr2 // 2
+    frames2 = np.lib.stride_tricks.sliding_window_view(
+        np.pad(data2, frame_length2 // 2, mode='reflect'),
+        frame_length2
+    )[::hop_length2]
+    rms2 = np.sqrt(np.mean(frames2 ** 2, axis=1, keepdims=True)).T
+    
     rms1 = torch.from_numpy(rms1)
     rms1 = F.interpolate(
         rms1.unsqueeze(0), size=data2.shape[0], mode="linear"

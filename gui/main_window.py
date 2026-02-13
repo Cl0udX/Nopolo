@@ -1,13 +1,16 @@
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
-    QLineEdit, QPushButton, QComboBox, QLabel, QGroupBox
+    QLineEdit, QPushButton, QComboBox, QLabel, QGroupBox,
+    QListWidget, QListWidgetItem  # ← NUEVO
 )
 from PySide6.QtCore import Qt
 from core.tts_engine import TTSEngine
 from core.rvc_engine import RVCEngine
 from core.audio_queue import AudioQueue
 from core.voice_manager import VoiceManager
+from core.provider_manager import ProviderManager  # ← NUEVO
 from gui.voice_config_dialog import VoiceConfigDialog
+from gui.provider_settings_dialog import ProviderSettingsDialog  # ← NUEVO
 import sys
 
 
@@ -15,7 +18,7 @@ class MainWindow(QWidget):
     def __init__(self, enable_api=False, api_host="0.0.0.0", api_port=8000):
         super().__init__()
         self.setWindowTitle("Nopolo - Voice Cloning TTS")
-        self.resize(600, 250)
+        self.resize(800, 300)  # ← Más ancho para panel lateral
         
         # Configuración de API
         self.enable_api = enable_api
@@ -23,7 +26,8 @@ class MainWindow(QWidget):
         self.api_port = api_port
         self.api_server = None
         
-        # Inicializar VoiceManager
+        # Inicializar managers
+        self.provider_manager = ProviderManager()  # ← NUEVO
         self.voice_manager = VoiceManager()
         
         # Inicializar engines
@@ -50,7 +54,11 @@ class MainWindow(QWidget):
     
     def _build_ui(self):
         """Construye la interfaz de usuario"""
-        main_layout = QVBoxLayout()
+        # Layout principal ahora es HORIZONTAL (izquierda + derecha)
+        main_layout = QHBoxLayout()  # ← CAMBIO: era QVBoxLayout
+        
+        # ========== PANEL IZQUIERDO (funcionalidad principal) ==========
+        left_panel = QVBoxLayout()
         
         # --- Sección de API (si está habilitada) ---
         if self.enable_api:
@@ -63,11 +71,11 @@ class MainWindow(QWidget):
             
             self.api_toggle_btn = QPushButton("🛑 Detener")
             self.api_toggle_btn.clicked.connect(self._toggle_api)
-            self.api_toggle_btn.setEnabled(False)  # Hasta que inicie
+            self.api_toggle_btn.setEnabled(False)
             api_layout.addWidget(self.api_toggle_btn)
             
             api_group.setLayout(api_layout)
-            main_layout.addWidget(api_group)
+            left_panel.addWidget(api_group)
         
         # --- Sección de selección de voz ---
         voice_group = QGroupBox("Configuración de Voz")
@@ -86,13 +94,13 @@ class MainWindow(QWidget):
         voice_layout.addWidget(self.add_voice_btn)
         
         voice_group.setLayout(voice_layout)
-        main_layout.addWidget(voice_group)
+        left_panel.addWidget(voice_group)
         
         # --- Información de la voz actual ---
         self.voice_info = QLabel("Selecciona una voz")
         self.voice_info.setStyleSheet("color: gray; font-size: 11px;")
         self.voice_info.setWordWrap(True)
-        main_layout.addWidget(self.voice_info)
+        left_panel.addWidget(self.voice_info)
         
         # --- Sección de entrada de texto ---
         text_group = QGroupBox("Texto a Sintetizar")
@@ -110,7 +118,7 @@ class MainWindow(QWidget):
         text_layout.addWidget(self.button)
         
         text_group.setLayout(text_layout)
-        main_layout.addWidget(text_group)
+        left_panel.addWidget(text_group)
         
         # --- Botones de gestión ---
         manage_layout = QHBoxLayout()
@@ -125,13 +133,81 @@ class MainWindow(QWidget):
         self.scan_btn.clicked.connect(self._scan_models)
         manage_layout.addWidget(self.scan_btn)
         
-        main_layout.addLayout(manage_layout)
+        left_panel.addLayout(manage_layout)  # ← AGREGAR ESTE LAYOUT AL PANEL IZQUIERDO
         
         # Espacio flexible
-        main_layout.addStretch()
+        left_panel.addStretch()
+        
+        # ========== PANEL DERECHO (gestión de providers) ==========
+        right_panel = self._build_provider_panel()
+        
+        # ========== Agregar ambos paneles al layout principal ==========
+        main_layout.addLayout(left_panel, 3)   # 75% del ancho
+        main_layout.addLayout(right_panel, 1)  # 25% del ancho
         
         self.setLayout(main_layout)
     
+
+    def _build_provider_panel(self) -> QVBoxLayout:
+        """Construye panel de gestión de providers TTS"""
+        panel = QVBoxLayout()
+        
+        # Grupo de providers
+        provider_group = QGroupBox("🔌 Engines TTS")
+        provider_layout = QVBoxLayout()
+        
+        # Lista de providers
+        self.provider_list = QListWidget()
+        self.provider_list.setMaximumHeight(150)
+        provider_layout.addWidget(self.provider_list)
+        
+        # Botones
+        btn_layout = QVBoxLayout()
+        
+        self.add_provider_btn = QPushButton("➕ Agregar")
+        self.add_provider_btn.clicked.connect(self._open_provider_settings)
+        btn_layout.addWidget(self.add_provider_btn)
+        
+        self.settings_provider_btn = QPushButton("⚙️ Configurar")
+        self.settings_provider_btn.clicked.connect(self._open_provider_settings)
+        btn_layout.addWidget(self.settings_provider_btn)
+        
+        provider_layout.addLayout(btn_layout)
+        provider_group.setLayout(provider_layout)
+        panel.addWidget(provider_group)
+        
+        panel.addStretch()
+        
+        # Cargar providers en lista
+        self._load_providers_list()
+        
+        return panel
+    
+    def _load_providers_list(self):
+        """Carga providers en el panel lateral"""
+        self.provider_list.clear()
+        
+        providers = self.provider_manager.get_enabled_providers()
+        
+        for provider in providers:
+            icon = provider.get("icon", "🔊")
+            name = provider["name"]
+            
+            item = QListWidgetItem(f"{icon} {name}")
+            self.provider_list.addItem(item)
+    
+    def _open_provider_settings(self):
+        """Abre diálogo de configuración de providers"""
+        dialog = ProviderSettingsDialog(
+            parent=self,
+            provider_manager=self.provider_manager
+        )
+        
+        if dialog.exec():
+            # Recargar lista
+            self._load_providers_list()
+            print("✅ Configuración de providers actualizada")
+
     def _start_api_server(self):
         """Inicia el servidor REST API"""
         try:

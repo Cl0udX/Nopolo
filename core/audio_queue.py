@@ -37,8 +37,11 @@ class AudioQueue:
             
             try:
                 # Paso 1: TTS (voz neutral)
-                tts_config = voice_profile.tts_config if voice_profile else None
-                neutral_wav = self.tts_engine.synthesize(text, tts_config)
+                if voice_profile and voice_profile.tts_config:
+                    # Actualizar config del engine (esto cambia provider si es necesario)
+                    self.tts_engine.update_config(voice_profile.tts_config)
+                
+                neutral_wav = self.tts_engine.synthesize(text)
                 
                 # Paso 2: RVC (transformación opcional)
                 if voice_profile and voice_profile.is_transformer_voice():

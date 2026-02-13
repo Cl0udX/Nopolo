@@ -466,16 +466,25 @@ class MelSpectrogram(torch.nn.Module):
                 ).to(audio.device)
             magnitude = self.stft.transform(audio)
         else:
+            # PATCH: Forzar CPU para evitar segfault en MPS
+            original_device = audio.device
+            audio_cpu = audio.cpu() if audio.device.type != 'cpu' else audio
+            window_cpu = self.hann_window[keyshift_key].cpu() if self.hann_window[keyshift_key].device.type != 'cpu' else self.hann_window[keyshift_key]
+            
             fft = torch.stft(
-                audio,
+                audio_cpu,
                 n_fft=n_fft_new,
                 hop_length=hop_length_new,
                 win_length=win_length_new,
-                window=self.hann_window[keyshift_key],
+                window=window_cpu,
                 center=center,
                 return_complex=True,
             )
             magnitude = torch.sqrt(fft.real.pow(2) + fft.imag.pow(2))
+            
+            # PATCH: Devolver magnitude al device original
+            if original_device.type != 'cpu':
+                magnitude = magnitude.to(original_device)
         if keyshift != 0:
             size = self.n_fft // 2 + 1
             resize = magnitude.size(1)

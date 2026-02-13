@@ -1,0 +1,20 @@
+{
+  "providers": {
+    "edge_tts": {
+      "name": "Edge TTS (Microsoft)",
+      "type": "edge_tts",
+      "enabled": true,
+      "requires_credentials": false,
+      "credentials": null,
+      "icon": "🔊"
+    },
+    "google_tts": {
+      "name": "Google Cloud TTS",
+      "type": "google_tts",
+      "enabled": true,
+      "requires_credentials": true,
+      "credentials": "/Users/santo/Downloads/imperial-audio-468104-u9-6dcba089ee20.json",
+      "icon": "🌐"
+    }
+  }
+}

@@ -55,10 +55,22 @@ def load_audio(file, sr):
             "You input a wrong audio path that does not exists, please fix it!"
         )
     try:
-        # Usar librosa directamente - más compatible y simple
-        audio, orig_sr = librosa.load(file, sr=None, mono=True)
+        # PATCH: Usar soundfile en lugar de librosa (evita problemas con numba en Mac)
+        import soundfile as sf
+        from scipy import signal
+        
+        audio, orig_sr = sf.read(file, dtype='float32')
+        
+        # Convertir a mono si es estéreo
+        if len(audio.shape) > 1:
+            audio = audio.mean(axis=1)
+        
+        # Resample si es necesario
         if orig_sr != sr:
-            audio = librosa.resample(audio, orig_sr=orig_sr, target_sr=sr)
-        return audio.flatten()
+            # Usar scipy.signal.resample que es puro numpy (sin numba)
+            num_samples = int(len(audio) * sr / orig_sr)
+            audio = signal.resample(audio, num_samples)
+        
+        return audio.flatten().astype('float32')
     except Exception:
         raise RuntimeError(traceback.format_exc())

@@ -179,15 +179,17 @@ class Config:
         logger.info("overwrite configs.json")
 
     def device_config(self) -> tuple:
+        # PATCH: Deshabilitar MPS en Mac (tiene bugs con torch.stft y fairseq)
+        # Usar CPU en su lugar
         if torch.cuda.is_available():
             self.use_cuda()
-        elif self.has_mps():
-            logger.info("No supported Nvidia GPU found")
-            self.use_mps()
+        # elif self.has_mps():  # DESHABILITADO - MPS tiene bugs
+        #     logger.info("No supported Nvidia GPU found")
+        #     self.use_mps()
         elif self.dml:
             self.use_dml()
         else:
-            logger.info("No supported Nvidia GPU found")
+            logger.info("No supported Nvidia GPU found, using CPU")
             self.device = self.instead = "cpu"
             self.is_half = False
             self.use_fp32_config()
