@@ -25,7 +25,7 @@ class EdgeTTSProvider(BaseTTSProvider):
             config = EdgeTTSConfig()
         
         super().__init__(config)
-        print("✅ Usando Edge TTS")
+        print("Usando Edge TTS")
     
     async def synthesize_async(self, text: str) -> str:
         """

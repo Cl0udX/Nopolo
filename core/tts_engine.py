@@ -74,11 +74,11 @@ class TTSEngine:
             credentials_path = pm.get_provider_credentials("google_tts")
             
             if not credentials_path:
-                print("⚠️ Google Cloud TTS no configurado, cambiando a Edge TTS")
+                print("Google Cloud TTS no configurado, cambiando a Edge TTS")
                 new_provider_name = "edge_tts"
                 # Crear provider de Edge TTS
                 if new_provider_name != current_provider_name:
-                    print(f"🔄 Cambiando provider: {current_provider_name} → {new_provider_name}")
+                    print(f"Cambiando provider: {current_provider_name} → {new_provider_name}")
                     self.provider = TTSProviderFactory.create("edge_tts", config)
                 else:
                     self.provider.update_config(config)
@@ -101,7 +101,7 @@ class TTSEngine:
             
             # Cambiar provider o actualizar config
             if new_provider_name != current_provider_name:
-                print(f"🔄 Cambiando provider: {current_provider_name} → {new_provider_name}")
+                print(f"Cambiando provider: {current_provider_name} → {new_provider_name}")
                 self.provider = TTSProviderFactory.create("google_tts", google_config)
             else:
                 # Mismo provider, actualizar con GoogleTTSConfig (NO EdgeTTSConfig)
@@ -110,7 +110,7 @@ class TTSEngine:
         else:
             # Edge TTS
             if new_provider_name != current_provider_name:
-                print(f"🔄 Cambiando provider: {current_provider_name} → {new_provider_name}")
+                print(f"Cambiando provider: {current_provider_name} → {new_provider_name}")
                 self.provider = TTSProviderFactory.create("edge_tts", config)
             else:
                 # Mismo provider, actualizar config

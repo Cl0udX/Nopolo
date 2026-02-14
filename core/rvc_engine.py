@@ -60,7 +60,7 @@ class RVCEngine:
     
     def load_model(self, config: RVCConfig):
         """Carga un modelo RVC específico usando get_vc()"""
-        print(f"🎙️ Cargando modelo RVC: {config.name}...")
+        print(f"Cargando modelo RVC: {config.name}...")
         
         self.config = config
         
@@ -71,25 +71,25 @@ class RVCEngine:
         # Guardar index_path (convertir a absoluto si es relativo)
         if config.index_path:
             index_path = config.index_path
-            print(f"📋 Index path del config: {index_path}")
+            print(f"Index path del config: {index_path}")
             
             if not os.path.isabs(index_path):
                 index_path = os.path.abspath(index_path)
-                print(f"📋 Convertido a absoluto: {index_path}")
+                print(f"Convertido a absoluto: {index_path}")
             
             if os.path.exists(index_path):
                 self.index_path = index_path
-                print(f"✅ Index encontrado: {os.path.basename(index_path)}")
+                print(f"Index encontrado: {os.path.basename(index_path)}")
             else:
                 self.index_path = None
-                print(f"⚠️ Index no encontrado en: {index_path}")
+                print(f"Index no encontrado en: {index_path}")
         else:
             self.index_path = None
-            print("ℹ️ Sin index (config.index_path es None o vacío)")
+            print("Sin index (config.index_path es None o vacío)")
         
         self.model_loaded = True
         
-        print(f"✅ Modelo RVC cargado: {config.name}")
+        print(f"Modelo RVC cargado: {config.name}")
     
     def _setup_hubert(self):
         """Descargar modelo Hubert si no existe"""
@@ -120,7 +120,7 @@ class RVCEngine:
         
         # En Mac usamos 'pm' en lugar de RMVPE
         if platform.system() == "Darwin":
-            print("🍎 Mac detectado - RMVPE no necesario (se usará 'pm')")
+            print("Mac detectado - RMVPE no necesario (se usará 'pm')")
             # Crear directorio vacío para que RVC no falle
             os.makedirs("models", exist_ok=True)
             return os.path.join("models", "rmvpe_dummy.pt")  # Path dummy
@@ -163,15 +163,15 @@ class RVCEngine:
         config = config_override or self.config
         
         try:
-            print(f"🔄 Convirtiendo voz con RVC ({config.name})...")
+            print(f"Convirtiendo voz con RVC ({config.name})...")
             
             # Preparar index path (usar self.index_path que ya fue validado en load_model)
             index_file = self.index_path if self.index_path else None
             
             if index_file:
-                print(f"📋 Usando index: {os.path.basename(index_file)}")
+                print(f"Usando index: {os.path.basename(index_file)}")
             else:
-                print("ℹ️ Sin index file")
+                print("Sin index file")
             
             # IMPORTANTE: Detectar plataforma y elegir método F0 apropiado
             # RMVPE tiene bugs en MPS (Mac), usamos 'pm' (parselmouth) en su lugar
@@ -179,7 +179,7 @@ class RVCEngine:
             f0_method = "pm" if platform.system() == "Darwin" else "rmvpe"
             
             if platform.system() == "Darwin":
-                print("🍎 Mac detectado - usando 'pm' en lugar de 'rmvpe' (más estable)")
+                print("Mac detectado - usando 'pm' en lugar de 'rmvpe' (más estable)")
             
             # Usar el método vc_inference con keyword arguments para mayor claridad
             tgt_sr, audio_opt, times, _ = self.vc.vc_inference(
@@ -200,7 +200,7 @@ class RVCEngine:
                 raise RuntimeError("RVC retornó None - revisar configuración de pitch/modelo")
             
             total_time = sum(times.values()) if times else 0
-            print(f"✅ Conversión RVC exitosa ({total_time:.2f}s, SR: {tgt_sr} Hz)")
+            print(f"Conversión RVC exitosa ({total_time:.2f}s, SR: {tgt_sr} Hz)")
             
             # Limpiar cache de MPS después de procesar
             self._cleanup_memory()
@@ -209,7 +209,7 @@ class RVCEngine:
             return (audio_opt.astype(np.float32) / 32768.0, tgt_sr)
             
         except Exception as e:
-            print(f"❌ Error en conversión RVC: {e}")
+            print(f"Error en conversión RVC: {e}")
             print(f"   Tipo: {type(e).__name__}")
             
             # Limpiar memoria
@@ -238,24 +238,24 @@ class RVCEngine:
             if torch.backends.mps.is_available():
                 torch.mps.empty_cache()
                 if force:
-                    print("🧹 Limpieza agresiva de cache MPS")
+                    print("Limpieza agresiva de cache MPS")
                 else:
-                    print("🧹 Cache MPS limpiado")
+                    print("Cache MPS limpiado")
             
             # Limpiar cache de CUDA (si existe)
             elif torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 if force:
-                    print("🧹 Limpieza agresiva de cache CUDA")
+                    print("Limpieza agresiva de cache CUDA")
                 else:
-                    print("🧹 Cache CUDA limpiado")
+                    print("Cache CUDA limpiado")
             
             # Recolección de basura forzada si se pidió
             if force:
                 import gc
                 gc.collect()
-                print("🧹 Garbage collector ejecutado")
+                print("Garbage collector ejecutado")
                 
         except Exception as e:
             # No fallar si la limpieza falla
-            print(f"⚠️ Error limpiando memoria (no crítico): {e}")
+            print(f"Error limpiando memoria (no crítico): {e}")

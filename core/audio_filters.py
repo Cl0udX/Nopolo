@@ -305,13 +305,13 @@ class AudioFilters:
         }
         
         if filter_id not in filter_map:
-            print(f"⚠️ Filtro desconocido: {filter_id}")
+            print(f"Filtro desconocido: {filter_id}")
             return audio
         
         try:
             return filter_map[filter_id](audio, sr)
         except Exception as e:
-            print(f"❌ Error aplicando filtro {filter_id}: {e}")
+            print(f"Error aplicando filtro {filter_id}: {e}")
             return audio
 
 

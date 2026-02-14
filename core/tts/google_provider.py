@@ -60,7 +60,7 @@ class GoogleTTSProvider(BaseTTSProvider):
         # Crear cliente
         try:
             self.client = texttospeech.TextToSpeechClient()
-            print("✅ Google Cloud TTS inicializado")
+            print("Google Cloud TTS inicializado")
         except Exception as e:
             raise RuntimeError(
                 f"Error inicializando Google TTS: {e}\n"
@@ -115,7 +115,7 @@ class GoogleTTSProvider(BaseTTSProvider):
                 for voice in voices.voices
             ]
         except Exception as e:
-            print(f"⚠️ Error obteniendo voces de Google: {e}")
+            print(f"Error obteniendo voces de Google: {e}")
             return []
     
     def validate_config(self) -> bool:

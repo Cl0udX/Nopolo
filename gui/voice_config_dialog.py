@@ -122,7 +122,7 @@ class VoiceConfigDialog(QDialog):
     def _build_tts_tab(self):
         """Construye el tab de configuración TTS"""
         widget = QWidget()
-        main_layout = QVBoxLayout()  # ← Layout principal para poder usar addStretch
+        main_layout = QVBoxLayout()
         
         # ========== Selector de Engine TTS ==========
         engine_group = QGroupBox("Engine TTS")
@@ -390,13 +390,13 @@ class VoiceConfigDialog(QDialog):
                 if file.endswith('.index'):
                     index_path = os.path.join(model_dir, file)
                     self.index_path_input.setText(index_path)
-                    print(f"✅ Index auto-detectado: {file}")
+                    print(f"Index auto-detectado: {file}")
                     index_found = True
                     break
             
             if not index_found:
                 self.index_path_input.clear()
-                print("ℹ️ No se encontró archivo .index (opcional)")
+                print("No se encontró archivo .index (opcional)")
     
     def _browse_index(self):
         """Abre diálogo para seleccionar archivo .index"""
@@ -409,7 +409,7 @@ class VoiceConfigDialog(QDialog):
         
         if file_path:
             self.index_path_input.setText(file_path)
-            print(f"✅ Index seleccionado: {os.path.basename(file_path)}")
+            print(f"Index seleccionado: {os.path.basename(file_path)}")
     
     def _load_profile_data(self):
         """Carga datos del perfil en modo editar"""
@@ -450,13 +450,32 @@ class VoiceConfigDialog(QDialog):
         if index >= 0:
             self.voice_combo.setCurrentIndex(index)
         
-        self.speed_slider.setValue(int(tts.speed * 100))
-        self.pitch_spinbox.setValue(tts.pitch)
-        self.volume_slider.setValue(int(tts.volume * 100))
+        # Cargar parámetros según el tipo de config
+        if provider_name == 'google_tts':
+            # Google TTS usa rate/volume como strings ("+0%", "+50%", etc.)
+            # Convertir rate string a speed float
+            rate_str = getattr(tts, 'rate', '+0%')
+            speed_percent = int(rate_str.replace('%', '').replace('+', ''))
+            speed = 1.0 + (speed_percent / 100.0)
+            self.speed_slider.setValue(int(speed * 100))
+            
+            # Pitch
+            self.pitch_spinbox.setValue(getattr(tts, 'pitch', 0))
+            
+            # Convertir volume string a float
+            volume_str = getattr(tts, 'volume', '+0%')
+            volume_percent = int(volume_str.replace('%', '').replace('+', ''))
+            volume = 1.0 + (volume_percent / 100.0)
+            self.volume_slider.setValue(int(volume * 100))
+        else:
+            # Edge TTS y otros usan speed/pitch/volume como números
+            self.speed_slider.setValue(int(getattr(tts, 'speed', 1.0) * 100))
+            self.pitch_spinbox.setValue(getattr(tts, 'pitch', 0))
+            self.volume_slider.setValue(int(getattr(tts, 'volume', 1.0) * 100))
         
         # RVC Config - HABILITAR CHECKBOX PRIMERO
         if self.profile.rvc_config:
-            self.use_rvc_checkbox.setChecked(True)  # ← ESTO HABILITA EL WIDGET
+            self.use_rvc_checkbox.setChecked(True)
             rvc = self.profile.rvc_config
             
             self.model_path_input.setText(rvc.model_path)
@@ -497,7 +516,7 @@ class VoiceConfigDialog(QDialog):
             model_id=model_id,
             name=self.name_input.text(),
             model_path=model_path,
-            index_path=index_path,  # ← AGREGAR
+            index_path=index_path,
             pitch_shift=self.pitch_shift_spinbox.value(),
             index_rate=self.index_rate_slider.value() / 100.0,
             filter_radius=self.filter_spinbox.value(),
@@ -633,7 +652,7 @@ class VoiceConfigDialog(QDialog):
         if not engine_type:
             return
         
-        print(f"🔄 Cambiando a engine: {engine_type}")
+        print(f"Cambiando a engine: {engine_type}")
         
         # Recargar voces del nuevo engine
         self._load_voices_for_engine(engine_type)
@@ -692,7 +711,7 @@ class VoiceConfigDialog(QDialog):
                         self.voice_combo.addItem(voice_label, voice['id'])
         
         except Exception as e:
-            print(f"❌ Error cargando voces de {engine_type}: {e}")
+            print(f"Error cargando voces de {engine_type}: {e}")
             self.voice_combo.addItem("Error cargando voces", None)
     
     def _build_tts_config(self) -> EdgeTTSConfig:

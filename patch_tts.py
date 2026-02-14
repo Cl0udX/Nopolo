@@ -17,5 +17,5 @@ content = content.replace(
 with open(filepath, 'w', encoding='utf-8') as f:
     f.write(content)
 
-print("✅ Parche aplicado exitosamente!")
+print("Parche aplicado exitosamente!")
 print("Ahora puedes usar XTTS v2 con PyTorch 2.6 y tu RTX 5070 Ti")

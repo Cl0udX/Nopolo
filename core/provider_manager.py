@@ -58,18 +58,18 @@ class ProviderManager:
             # Configuración según tipo
             provider_config = self._get_provider_template(provider_type)
             if not provider_config:
-                print(f"❌ Tipo de proveedor desconocido: {provider_type}")
+                print(f"Tipo de proveedor desconocido: {provider_type}")
                 return False
         
         # Validar credenciales si es necesario
         if provider_config["requires_credentials"]:
             if not credentials_path or not os.path.exists(credentials_path):
-                print(f"❌ Se requiere archivo de credenciales para {provider_type}")
+                print(f"Se requiere archivo de credenciales para {provider_type}")
                 return False
             
             # Validar credenciales
             if not self._validate_credentials(provider_type, credentials_path):
-                print(f"❌ Credenciales inválidas para {provider_type}")
+                print(f"Credenciales inválidas para {provider_type}")
                 return False
             
             provider_config["credentials"] = credentials_path
@@ -80,19 +80,19 @@ class ProviderManager:
         self.save_to_file()
         
         action = "actualizado" if is_update else "agregado"
-        print(f"✅ Proveedor {provider_config['name']} {action}")
+        print(f"Proveedor {provider_config['name']} {action}")
         return True
     
     def remove_provider(self, provider_type: str) -> bool:
         """Elimina un proveedor (excepto Edge TTS que es default)"""
         if provider_type == "edge_tts":
-            print("⚠️ No se puede eliminar Edge TTS (proveedor por defecto)")
+            print("No se puede eliminar Edge TTS (proveedor por defecto)")
             return False
         
         if provider_type in self.providers:
             del self.providers[provider_type]
             self.save_to_file()
-            print(f"✅ Proveedor {provider_type} eliminado")
+            print(f"Proveedor {provider_type} eliminado")
             return True
         
         return False
@@ -145,7 +145,7 @@ class ProviderManager:
                 # Verificar campos requeridos de Google Cloud
                 required_fields = ["type", "project_id", "private_key", "client_email"]
                 if not all(field in creds for field in required_fields):
-                    print("❌ JSON de Google Cloud incompleto")
+                    print("JSON de Google Cloud incompleto")
                     return False
                 
                 # Intentar inicializar cliente de Google
@@ -155,14 +155,14 @@ class ProviderManager:
                     provider = GoogleTTSProvider(config)
                     return provider.validate_config()
                 except Exception as e:
-                    print(f"❌ Error validando Google TTS: {e}")
+                    print(f"Error validando Google TTS: {e}")
                     return False
                 
             except json.JSONDecodeError:
-                print("❌ Archivo de credenciales no es un JSON válido")
+                print("Archivo de credenciales no es un JSON válido")
                 return False
             except Exception as e:
-                print(f"❌ Error leyendo credenciales: {e}")
+                print(f"Error leyendo credenciales: {e}")
                 return False
         
         return True
@@ -182,7 +182,7 @@ class ProviderManager:
                 data = json.load(f)
             
             self.providers = data.get("providers", {})
-            print(f"✅ {len(self.providers)} providers cargados")
+            print(f"{len(self.providers)} providers cargados")
             
         except Exception as e:
             print(f"Error cargando providers: {e}")

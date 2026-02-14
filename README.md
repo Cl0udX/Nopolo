@@ -309,7 +309,7 @@ pip install torch torchvision torchaudio
 
 pip install git+https://github.com/Tps-F/fairseq.git@main (Como administrador)
 
-pip install fastapi uvicorn[standard] pydantic python-dotenv
+pip install fastapi uvicorn pydantic python-dotenv
 
 pip install google-cloud-texttospeech
 ```

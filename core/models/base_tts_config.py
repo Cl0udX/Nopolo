@@ -40,7 +40,7 @@ class BaseTTSConfig:
 @dataclass
 class EdgeTTSConfig(BaseTTSConfig):
     """Configuración específica para Edge TTS (Microsoft Azure)"""
-    provider_name: str = "edge_tts"  # ← Solo provider_name, sin engine_type
+    provider_name: str = "edge_tts"
     voice_id: str = "es-MX-JorgeNeural"
     
     # Parámetros específicos de Edge TTS

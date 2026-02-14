@@ -250,6 +250,29 @@ class TTSAPIServer:
             
             return {"success": True, "message": "Queue cleared"}
         
+        @self.app.post("/api/audio/stop")
+        async def stop_audio():
+            """Detiene el audio que está sonando actualmente"""
+            self.audio_queue.stop_current()
+            return {"success": True, "message": "Audio stopped"}
+        
+        @self.app.post("/api/audio/skip")
+        async def skip_audio():
+            """Salta al siguiente en la cola"""
+            self.audio_queue.skip_to_next()
+            queue_size = self.audio_queue.get_queue_size()
+            return {
+                "success": True, 
+                "message": "Skipped to next",
+                "queue_size": queue_size
+            }
+        
+        @self.app.delete("/api/audio/clear")
+        async def clear_all_audio():
+            """Detiene el audio actual y limpia toda la cola"""
+            self.audio_queue.clear_queue()
+            return {"success": True, "message": "Audio stopped and queue cleared"}
+        
         @self.app.post("/api/synthesize/advanced")
         async def synthesize_advanced(request: AdvancedTTSRequest):
             """

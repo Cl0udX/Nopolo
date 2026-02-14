@@ -2,30 +2,60 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
     QLineEdit, QPushButton, QComboBox, QLabel, QGroupBox,
     QListWidget, QListWidgetItem, QCheckBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QTabWidget, QSplitter  # ← Pestañas y divisor
+    QTableWidgetItem, QHeaderView, QTabWidget, QSplitter,
+    QTextEdit, QDialog, QFormLayout, QMessageBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont
 from core.tts_engine import TTSEngine
 from core.rvc_engine import RVCEngine
 from core.audio_queue import AudioQueue
 from core.voice_manager import VoiceManager
-from core.provider_manager import ProviderManager  # ← NUEVO
-from core.advanced_processor import AdvancedAudioProcessor  # ← NUEVO
-from core.sound_manager import SoundManager  # ← NUEVO
-from core.background_manager import BackgroundManager  # ← NUEVO
+from core.provider_manager import ProviderManager
+from core.advanced_processor import AdvancedAudioProcessor
+from core.sound_manager import SoundManager
+from core.background_manager import BackgroundManager
 from gui.voice_config_dialog import VoiceConfigDialog
-from gui.provider_settings_dialog import ProviderSettingsDialog  # ← NUEVO
-from gui.effects_manager_dialog import EffectsManagerDialog, EffectEditorDialog  # ← NUEVO
+from gui.provider_settings_dialog import ProviderSettingsDialog
+from gui.effects_manager_dialog import EffectsManagerDialog, EffectEditorDialog
 import sys
 import os
 import json
+
+
+class ConsoleRedirector:
+    """Redirige stdout/stderr a la consola de la GUI"""
+    def __init__(self, console_widget):
+        self.console_widget = console_widget
+        self.terminal = sys.__stdout__  # Mantener referencia a terminal original
+    
+    def write(self, text):
+        """Escribe en la consola y en la terminal"""
+        if text.strip():  # Ignorar líneas vacías
+            # Escribir en consola GUI
+            self.console_widget.append(text.rstrip())
+            # Auto-scroll
+            scrollbar = self.console_widget.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+            
+            # También escribir en terminal
+            self.terminal.write(text)
+            self.terminal.flush()
+    
+    def flush(self):
+        """Flush para compatibilidad"""
+        self.terminal.flush()
+    
+    def isatty(self):
+        """Retorna False para indicar que no es una terminal TTY"""
+        return False
 
 
 class MainWindow(QWidget):
     def __init__(self, enable_api=False, api_host="0.0.0.0", api_port=8000):
         super().__init__()
         self.setWindowTitle("Nopolo - Voice Cloning TTS")
-        self.resize(1200, 600)  # ← Más ancho y alto para 3 paneles
+        self.resize(1400, 550)  # Más ancho y altura moderada para la consola
         
         # Configuración de API
         self.enable_api = enable_api
@@ -34,10 +64,10 @@ class MainWindow(QWidget):
         self.api_server = None
         
         # Inicializar managers
-        self.provider_manager = ProviderManager()  # ← NUEVO
+        self.provider_manager = ProviderManager()
         self.voice_manager = VoiceManager()
-        self.sound_manager = SoundManager()  # ← NUEVO
-        self.background_manager = BackgroundManager()  # ← NUEVO
+        self.sound_manager = SoundManager()
+        self.background_manager = BackgroundManager()
         
         # Inicializar engines
         default_profile = self.voice_manager.get_default_profile()
@@ -64,16 +94,28 @@ class MainWindow(QWidget):
         # Cargar voces en dropdown
         self._load_voices()
         
+        # Iniciar verificación de conexión a internet
+        self._check_internet_connection()
+        
+        # Timer para verificar conexión periódicamente (cada 30 segundos)
+        self.connection_timer = QTimer()
+        self.connection_timer.timeout.connect(self._check_internet_connection)
+        self.connection_timer.start(30000)  # 30 segundos
+        
         # Iniciar API si está habilitado
         if self.enable_api:
             self._start_api_server()
+
+    # ============================================================================
+    # SECCIÓN: CONSTRUCCIÓN DE LA INTERFAZ DE USUARIO
+    # ============================================================================
     
     def _build_ui(self):
         """Construye la interfaz de usuario"""
-        # Layout principal HORIZONTAL con SPLITTER para redimensionar
-        main_layout = QHBoxLayout()
+        # Layout principal VERTICAL (para tener paneles arriba y consola abajo)
+        main_layout = QVBoxLayout()
         
-        # Crear splitter horizontal (permite redimensionar)
+        # Crear splitter horizontal para los 3 paneles principales
         splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # ========== PANEL IZQUIERDO: EFECTOS Y FONDOS (con pestañas) ==========
@@ -130,11 +172,11 @@ class MainWindow(QWidget):
         text_group = QGroupBox("Texto a Sintetizar")
         text_layout = QVBoxLayout()
         
-        # Checkbox para modo multi-voz
+        # Checkbox para modo Nopolo
         mode_layout = QHBoxLayout()
-        self.multivoice_check = QCheckBox("Modo Multi-Voz")
+        self.multivoice_check = QCheckBox("Modo Nopolo")
         self.multivoice_check.setToolTip(
-            "Activa el análisis de sintaxis Mopolo:\n"
+            "Activa el análisis de sintaxis Nopolo:\n"
             "- voz: texto\n"
             "- (sonido)\n"
             "- voz.filtro: texto\n"
@@ -187,13 +229,44 @@ class MainWindow(QWidget):
         splitter.addWidget(center_widget)
         splitter.addWidget(right_widget)
         
-        # Tamaños iniciales (proporciones: 25% | 60% | 15%)
-        splitter.setStretchFactor(0, 25)  # Efectos/fondos
-        splitter.setStretchFactor(1, 60)  # Panel principal
+        # Tamaños iniciales (proporciones: 30% | 55% | 15%)
+        splitter.setStretchFactor(0, 30)  # Efectos/fondos (más ancho)
+        splitter.setStretchFactor(1, 55)  # Panel principal
         splitter.setStretchFactor(2, 15)  # Providers
         
         # Agregar splitter al layout principal
         main_layout.addWidget(splitter)
+        
+        # ========== CONSOLA DESPLEGABLE ==========
+        # Botón para mostrar/ocultar consola
+        console_toggle_layout = QHBoxLayout()
+        self.console_toggle_btn = QPushButton("▼ Mostrar Consola")
+        self.console_toggle_btn.setMaximumHeight(25)
+        self.console_toggle_btn.clicked.connect(self._toggle_console)
+        console_toggle_layout.addStretch()
+        console_toggle_layout.addWidget(self.console_toggle_btn)
+        console_toggle_layout.addStretch()
+        main_layout.addLayout(console_toggle_layout)
+        
+        # Widget de consola (inicialmente oculto)
+        self.console_widget = QTextEdit()
+        self.console_widget.setReadOnly(True)
+        self.console_widget.setMaximumHeight(200)
+        self.console_widget.setStyleSheet("""
+            QTextEdit {
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                font-family: 'Courier New', monospace;
+                font-size: 11px;
+                border: 1px solid #3e3e3e;
+            }
+        """)
+        self.console_widget.setPlaceholderText("Los logs de la aplicación aparecerán aquí...")
+        self.console_widget.hide()  # Oculto por defecto
+        main_layout.addWidget(self.console_widget)
+        
+        # Redirigir stdout a la consola
+        sys.stdout = ConsoleRedirector(self.console_widget)
         
         self.setLayout(main_layout)
     
@@ -203,7 +276,7 @@ class MainWindow(QWidget):
         panel = QVBoxLayout()
         
         # Grupo de providers
-        provider_group = QGroupBox("🔌 Engines TTS")
+        provider_group = QGroupBox("Engines TTS")
         provider_layout = QVBoxLayout()
         
         # Lista de providers
@@ -211,20 +284,52 @@ class MainWindow(QWidget):
         self.provider_list.setMaximumHeight(150)
         provider_layout.addWidget(self.provider_list)
         
-        # Botones
-        btn_layout = QVBoxLayout()
-        
-        self.add_provider_btn = QPushButton("➕ Agregar")
-        self.add_provider_btn.clicked.connect(self._open_provider_settings)
-        btn_layout.addWidget(self.add_provider_btn)
-        
+        # Botón de configuración
         self.settings_provider_btn = QPushButton("⚙️ Configurar")
         self.settings_provider_btn.clicked.connect(self._open_provider_settings)
-        btn_layout.addWidget(self.settings_provider_btn)
+        provider_layout.addWidget(self.settings_provider_btn)
         
-        provider_layout.addLayout(btn_layout)
         provider_group.setLayout(provider_layout)
         panel.addWidget(provider_group)
+        
+        # Grupo de control de reproducción
+        playback_group = QGroupBox("Control de Audio")
+        playback_layout = QVBoxLayout()
+        
+        # Botón silenciar
+        self.stop_audio_btn = QPushButton("⏹ Silenciar")
+        self.stop_audio_btn.clicked.connect(self._stop_audio)
+        playback_layout.addWidget(self.stop_audio_btn)
+        
+        # Botón siguiente
+        self.next_audio_btn = QPushButton("⏭ Siguiente")
+        self.next_audio_btn.clicked.connect(self._skip_audio)
+        playback_layout.addWidget(self.next_audio_btn)
+        
+        playback_group.setLayout(playback_layout)
+        panel.addWidget(playback_group)
+        
+        # Grupo de configuración de la aplicación
+        app_config_group = QGroupBox("Configuración")
+        app_config_layout = QVBoxLayout()
+        
+        # Botón de configuración de audio
+        self.audio_device_btn = QPushButton("🔊 Dispositivo de Salida")
+        self.audio_device_btn.clicked.connect(self._open_audio_device_settings)
+        app_config_layout.addWidget(self.audio_device_btn)
+        
+        # Indicador de conexión a internet
+        connection_layout = QHBoxLayout()
+        self.connection_indicator = QLabel("●")
+        self.connection_indicator.setStyleSheet("color: gray; font-size: 16px;")
+        self.connection_label = QLabel("Verificando...")
+        connection_layout.addWidget(self.connection_indicator)
+        connection_layout.addWidget(self.connection_label)
+        connection_layout.addStretch()
+        app_config_layout.addLayout(connection_layout)
+        
+        app_config_group.setLayout(app_config_layout)
+        panel.addWidget(app_config_group)
         
         panel.addStretch()
         
@@ -256,6 +361,9 @@ class MainWindow(QWidget):
         
         # Configurar tabla de filtros
         header = self.filters_table.horizontalHeader()
+        header.setDefaultSectionSize(80)  # Ancho mínimo de columnas
+        header.setMinimumSectionSize(40)  # Mínimo absoluto
+        header.setFont(QFont("Arial", 11, QFont.Weight.Bold))  # Headers más grandes y bold
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
@@ -280,6 +388,9 @@ class MainWindow(QWidget):
         
         # Configurar tabla de sonidos
         header = self.sounds_table.horizontalHeader()
+        header.setDefaultSectionSize(80)
+        header.setMinimumSectionSize(40)
+        header.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -316,6 +427,9 @@ class MainWindow(QWidget):
         
         # Configurar tabla de fondos
         header = self.backgrounds_table.horizontalHeader()
+        header.setDefaultSectionSize(80)
+        header.setMinimumSectionSize(40)
+        header.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -413,6 +527,10 @@ class MainWindow(QWidget):
         btn_preview.clicked.connect(lambda: self._test_integrated_filter(filter_id, name))
         self.filters_table.setCellWidget(row, 4, btn_preview)
     
+    # ============================================================================
+    # SECCIÓN: GESTIÓN DE SONIDOS PERSONALIZADOS
+    # ============================================================================
+    
     def _add_sound_row(self, sound_data):
         """Agrega un sonido personalizado (con editar/eliminar)"""
         row = self.sounds_table.rowCount()
@@ -457,6 +575,10 @@ class MainWindow(QWidget):
         btn_delete.setMaximumWidth(40)
         btn_delete.clicked.connect(lambda: self._delete_sound(sound_id))
         self.sounds_table.setCellWidget(row, 6, btn_delete)
+    
+    # ============================================================================
+    # SECCIÓN: GESTIÓN DE FONDOS DE AUDIO
+    # ============================================================================
     
     def _add_background_row(self, bg_id, bg_data):
         """Agrega un fondo personalizado (con editar/eliminar)"""
@@ -550,6 +672,10 @@ class MainWindow(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self.background_manager.remove_background(bg_id)
             self._load_backgrounds_table()
+    
+    # ============================================================================
+    # SECCIÓN: IMPORTACIÓN MASIVA DE ARCHIVOS DE AUDIO
+    # ============================================================================
     
     def _import_audio_files(self, audio_type="sound"):
         """Importa múltiples archivos de audio (MP3/WAV) de forma masiva
@@ -717,9 +843,9 @@ class MainWindow(QWidget):
                 audio, sr = sf.read(sound_data['path'], dtype='float32')
                 play_wav((audio, sr))
             except Exception as e:
-                print(f"⚠️ Error reproduciendo sonido {sound_id}: {e}")
+                print(f"Error reproduciendo sonido {sound_id}: {e}")
         else:
-            print(f"⚠️ No se encontró el sonido {sound_id}")
+            print(f"No se encontró el sonido {sound_id}")
     
     def _play_background_preview(self, bg_id):
         """Reproduce preview de un fondo (solo 5 segundos)"""
@@ -738,9 +864,9 @@ class MainWindow(QWidget):
                 
                 play_wav((preview_audio, sr))
             except Exception as e:
-                print(f"⚠️ Error reproduciendo fondo {bg_id}: {e}")
+                print(f"Error reproduciendo fondo {bg_id}: {e}")
         else:
-            print(f"⚠️ No se encontró el fondo {bg_id}")
+            print(f"No se encontró el fondo {bg_id}")
     
     def _test_integrated_filter(self, filter_id, filter_name):
         """Ejecuta un test de un filtro integrado con voz de prueba"""
@@ -755,8 +881,8 @@ class MainWindow(QWidget):
         # Texto de prueba con el filtro (usando profile_id)
         test_text = f"{voice_id}.{filter_id}: Hola como estas, esto es una prueba del filtro {filter_name}. Esto debería sonar con el efecto aplicado."
         
-        print(f"🧪 Testing filtro '{filter_id}' ({filter_name})")
-        print(f"📝 Texto: {test_text}")
+        print(f"Testing filtro '{filter_id}' ({filter_name})")
+        print(f"Texto: {test_text}")
         
         # Usar el modo multi-voz para procesar con el filtro
         try:
@@ -785,7 +911,11 @@ class MainWindow(QWidget):
                 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al probar filtro: {e}")
-            print(f"❌ Error: {e}")
+            print(f"Error: {e}")
+    
+    # ============================================================================
+    # SECCIÓN: GESTIÓN DE PROVIDERS TTS
+    # ============================================================================
     
     def _load_providers_list(self):
         """Carga providers en el panel lateral"""
@@ -810,7 +940,11 @@ class MainWindow(QWidget):
         if dialog.exec():
             # Recargar lista
             self._load_providers_list()
-            print("✅ Configuración de providers actualizada")
+            print("Configuración de providers actualizada")
+
+    # ============================================================================
+    # SECCIÓN: SERVIDOR API REST
+    # ============================================================================
 
     def _start_api_server(self):
         """Inicia el servidor REST API"""
@@ -857,6 +991,10 @@ class MainWindow(QWidget):
         else:
             self._start_api_server()
             self.api_toggle_btn.setText("🛑 Detener")
+    
+    # ============================================================================
+    # SECCIÓN: GESTIÓN DE VOCES
+    # ============================================================================
     
     def _load_voices(self):
         """Carga las voces disponibles en el dropdown"""
@@ -989,6 +1127,10 @@ class MainWindow(QWidget):
         else:
             self.input.setPlaceholderText("Escribe el texto aquí...")
     
+    # ============================================================================
+    # SECCIÓN: REPRODUCCIÓN DE AUDIO (TTS + RVC)
+    # ============================================================================
+    
     def play_text(self):
         """Reproduce el texto con la voz seleccionada o modo multi-voz"""
         text = self.input.text().strip()
@@ -997,41 +1139,190 @@ class MainWindow(QWidget):
         
         # Verificar modo multi-voz
         if self.multivoice_check.isChecked():
-            # Modo multi-voz: procesar con AdvancedProcessor
-            try:
-                import soundfile as sf
-                import sounddevice as sd
-                import tempfile
-                
-                # Procesar mensaje
-                audio_data, sample_rate = self.advanced_processor.process_message(text)
-                
-                # Guardar temporalmente
-                temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-                temp_file.close()
-                sf.write(temp_file.name, audio_data, sample_rate)
-                
-                # Reproducir
-                sd.play(audio_data, sample_rate)
-                sd.wait()
-                
-                # Limpiar archivo temporal
-                import os
-                os.unlink(temp_file.name)
-                
-            except Exception as e:
-                print(f"Error en modo multi-voz: {e}")
-                import traceback
-                traceback.print_exc()
+            # Modo multi-voz: procesar con AdvancedProcessor en thread separado
+            import threading
+            thread = threading.Thread(target=self._play_multivoice, args=(text,), daemon=True)
+            thread.start()
         else:
-            # Modo tradicional: usar cola de audio
+            # Modo tradicional: usar cola de audio (ya es no bloqueante)
             profile_id = self.voice_combo.currentData()
             profile = self.voice_manager.get_profile(profile_id)
             
             # Agregar a la cola
             self.audio_queue.add(text, profile)
+    
+    def _play_multivoice(self, text: str):
+        """Procesa y reproduce audio multi-voz en thread separado"""
+        try:
+            import soundfile as sf
+            import sounddevice as sd
+            import tempfile
+            
+            # Procesar mensaje
+            audio_data, sample_rate = self.advanced_processor.process_message(text)
+            
+            # Guardar temporalmente
+            temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            temp_file.close()
+            sf.write(temp_file.name, audio_data, sample_rate)
+            
+            # Reproducir
+            sd.play(audio_data, sample_rate)
+            sd.wait()
+            
+            # Limpiar archivo temporal
+            import os
+            os.unlink(temp_file.name)
+            
+        except Exception as e:
+            print(f"Error en modo multi-voz: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # ============================================================================
+    # SECCIÓN: CONTROLES DE REPRODUCCIÓN Y UI
+    # ============================================================================
+    
+    def _stop_audio(self):
+        """Detiene todo el audio que está sonando"""
+        self.audio_queue.stop_current()
+        print("Audio detenido")
+    
+    def _skip_audio(self):
+        """Salta al siguiente en la cola"""
+        self.audio_queue.skip_to_next()
+        queue_size = self.audio_queue.get_queue_size()
+        print(f"Saltando al siguiente (quedan {queue_size} en cola)")
         
         self.input.clear()
+    
+    def _toggle_console(self):
+        """Muestra/oculta la consola de logs"""
+        if self.console_widget.isVisible():
+            self.console_widget.hide()
+            self.console_toggle_btn.setText("▼ Mostrar Consola")
+        else:
+            self.console_widget.show()
+            self.console_toggle_btn.setText("▲ Ocultar Consola")
+    
+    def log_to_console(self, message: str):
+        """Agrega un mensaje a la consola"""
+        self.console_widget.append(message)
+        # Auto-scroll al final
+        scrollbar = self.console_widget.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    # ============================================================================
+    # SECCIÓN: CONFIGURACIÓN DEL SISTEMA Y UTILIDADES
+    # ============================================================================
+    
+    def _check_internet_connection(self):
+        """Verifica la conexión a internet"""
+        try:
+            import socket
+            socket.create_connection(("8.8.8.8", 53), timeout=3)
+            self.connection_indicator.setStyleSheet("color: green; font-size: 16px;")
+            self.connection_label.setText("Conectado")
+            return True
+        except OSError:
+            self.connection_indicator.setStyleSheet("color: red; font-size: 16px;")
+            self.connection_label.setText("Sin conexión")
+            return False
+    
+    def _open_audio_device_settings(self):
+        """Abre diálogo para seleccionar dispositivo de salida de audio"""
+        try:
+            import sounddevice as sd
+            
+            # Obtener lista de dispositivos
+            devices = sd.query_devices()
+            output_devices = []
+            
+            for i, device in enumerate(devices):
+                if device['max_output_channels'] > 0:
+                    output_devices.append((i, device['name']))
+            
+            # Obtener dispositivo actual
+            current_device = sd.default.device[1]  # [input, output]
+            
+            # Crear diálogo
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Configuración de Dispositivo de Audio")
+            dialog.resize(500, 300)
+            
+            layout = QVBoxLayout()
+            
+            # Información
+            info_label = QLabel("Selecciona el dispositivo de salida de audio:")
+            layout.addWidget(info_label)
+            
+            # Lista de dispositivos
+            device_list = QListWidget()
+            
+            for idx, name in output_devices:
+                item = QListWidgetItem(f"{name}")
+                item.setData(Qt.UserRole, idx)
+                device_list.addItem(item)
+                
+                # Seleccionar el dispositivo actual
+                if idx == current_device:
+                    device_list.setCurrentItem(item)
+            
+            layout.addWidget(device_list)
+            
+            # Botones
+            button_layout = QHBoxLayout()
+            
+            default_btn = QPushButton("Usar Predeterminado del Sistema")
+            default_btn.clicked.connect(lambda: self._set_audio_device(None, dialog))
+            button_layout.addWidget(default_btn)
+            
+            apply_btn = QPushButton("Aplicar")
+            apply_btn.clicked.connect(lambda: self._set_audio_device(
+                device_list.currentItem().data(Qt.UserRole) if device_list.currentItem() else None,
+                dialog
+            ))
+            button_layout.addWidget(apply_btn)
+            
+            cancel_btn = QPushButton("Cancelar")
+            cancel_btn.clicked.connect(dialog.reject)
+            button_layout.addWidget(cancel_btn)
+            
+            layout.addLayout(button_layout)
+            dialog.setLayout(layout)
+            dialog.exec()
+            
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"Error al cargar dispositivos de audio:\n{str(e)}"
+            )
+    
+    def _set_audio_device(self, device_id, dialog):
+        """Establece el dispositivo de audio"""
+        try:
+            import sounddevice as sd
+            
+            if device_id is None:
+                # Usar predeterminado del sistema
+                sd.default.device = sd.default.device[0], None  # [input, default output]
+                self.log_to_console("Dispositivo de audio: Predeterminado del sistema")
+            else:
+                # Usar dispositivo específico
+                sd.default.device = sd.default.device[0], device_id
+                devices = sd.query_devices()
+                device_name = devices[device_id]['name']
+                self.log_to_console(f"Dispositivo de audio: {device_name}")
+            
+            dialog.accept()
+            
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"Error al cambiar dispositivo de audio:\n{str(e)}"
+            )
     
     def closeEvent(self, event):
         """Limpieza al cerrar la ventana"""

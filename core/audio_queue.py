@@ -3,7 +3,7 @@ import queue
 from typing import Optional
 from .tts_engine import TTSEngine
 from .rvc_engine import RVCEngine
-from .audio_player import play_wav
+from .audio_player import play_wav, stop_audio
 from .models import VoiceProfile
 
 
@@ -29,6 +29,30 @@ class AudioQueue:
             voice_profile: Perfil de voz a usar (opcional)
         """
         self.queue.put((text, voice_profile))
+    
+    def stop_current(self):
+        """Detiene el audio que está sonando actualmente"""
+        stop_audio()
+    
+    def skip_to_next(self):
+        """Salta al siguiente en la cola (detiene el actual)"""
+        stop_audio()
+    
+    def clear_queue(self):
+        """Limpia toda la cola de audios pendientes"""
+        # Vaciar la cola
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+                self.queue.task_done()
+            except queue.Empty:
+                break
+        # Detener el actual
+        stop_audio()
+    
+    def get_queue_size(self):
+        """Retorna el número de items en la cola"""
+        return self.queue.qsize()
     
     def _worker(self):
         """Worker thread que procesa la cola"""

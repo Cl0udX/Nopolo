@@ -25,7 +25,7 @@ def force_cpu_for_rvc():
     # 1. Deshabilitar Numba JIT (causa segfault en Mac ARM64)
     os.environ['NUMBA_DISABLE_JIT'] = '1'
     os.environ['NUMBA_CACHE_DIR'] = '/tmp'
-    print("🔧 Numba JIT deshabilitado (evita segfault en Mac)")
+    print("Numba JIT deshabilitado (evita segfault en Mac)")
     
     # 2. Variables de entorno para PyTorch
     os.environ['CUDA_VISIBLE_DEVICES'] = ''  # Sin CUDA
@@ -50,7 +50,7 @@ def force_cpu_for_rvc():
     warnings.filterwarnings('ignore', category=FutureWarning)
     warnings.filterwarnings('ignore', category=UserWarning)
     
-    print("✅ CPU forzado para RVC (Mac optimizado)")
+    print("CPU forzado para RVC (Mac optimizado)")
 
 # Ejecutar automáticamente al importar este módulo
 force_cpu_for_rvc()

@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import numpy as np
-import soundfile as sf
+from pydub import AudioSegment
 
 
 class BackgroundManager:
@@ -54,16 +54,16 @@ class BackgroundManager:
                             self.backgrounds_by_name[name] = bg_data
                     
                     if self.backgrounds:
-                        print(f"✅ Cargados {len(self.backgrounds)} fondos desde {self.config_path}")
+                        print(f"Cargados {len(self.backgrounds)} fondos desde {self.config_path}")
                     else:
-                        print(f"📝 Configuración de fondos cargada (vacía) - usa 'Importar Fondos' para agregar")
+                        print(f"Configuración de fondos cargada (vacía) - usa 'Importar Fondos' para agregar")
             else:
                 # Crear configuración por defecto
-                print(f"⚠️ Archivo de fondos no encontrado: {self.config_path}")
+                print(f"Archivo de fondos no encontrado: {self.config_path}")
                 print("   Creando configuración por defecto...")
                 self._create_default_config()
         except Exception as e:
-            print(f"❌ Error cargando configuración de fondos: {e}")
+            print(f"Error cargando configuración de fondos: {e}")
             self._create_default_config()
     
     def _create_default_config(self):
@@ -88,8 +88,8 @@ class BackgroundManager:
         with open(self.config_path, 'w', encoding='utf-8') as f:
             json.dump(default_config, f, indent=2, ensure_ascii=False)
         
-        print(f"✅ Configuración de fondos creada: {self.config_path}")
-        print(f"   � Archivo vacío - usa 'Importar Fondos' para agregar archivos")
+        print(f"Configuración de fondos creada: {self.config_path}")
+        print(f"Archivo vacío - usa 'Importar Fondos' para agregar archivos")
     
     def _save_config(self):
         """Guarda la configuración actual en el archivo JSON."""
@@ -169,11 +169,20 @@ class BackgroundManager:
             return None
         
         try:
-            audio_data, sample_rate = sf.read(path)
+            # Usar pydub para soportar MP3, WAV, etc.
+            audio = AudioSegment.from_file(path)
             
             # Convertir a mono si es estéreo
-            if len(audio_data.shape) > 1:
-                audio_data = np.mean(audio_data, axis=1)
+            if audio.channels > 1:
+                audio = audio.set_channels(1)
+            
+            # Convertir a numpy array
+            audio_data = np.array(audio.get_array_of_samples(), dtype=np.float32)
+            
+            # Normalizar de int16 a float32 (-1.0 a 1.0)
+            audio_data = audio_data / 32768.0
+            
+            sample_rate = audio.frame_rate
             
             return audio_data, sample_rate, volume
             
@@ -242,7 +251,7 @@ class BackgroundManager:
         """
         try:
             if bg_id not in self.backgrounds:
-                print(f"⚠️ Fondo con ID '{bg_id}' no encontrado")
+                print(f"Fondo con ID '{bg_id}' no encontrado")
                 return False
             
             # Obtener datos antes de eliminar
@@ -261,11 +270,11 @@ class BackgroundManager:
             # Guardar configuración
             self._save_config()
             
-            print(f"✅ Fondo '{bg_id}' eliminado correctamente")
+            print(f"Fondo '{bg_id}' eliminado correctamente")
             return True
             
         except Exception as e:
-            print(f"❌ Error eliminando fondo: {e}")
+            print(f"Error eliminando fondo: {e}")
             return False
 
 

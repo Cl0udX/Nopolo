@@ -74,4 +74,4 @@ class TTSProviderFactory:
             raise TypeError(f"{provider_class} debe heredar de BaseTTSProvider")
         
         cls._providers[name] = provider_class
-        print(f"✅ Proveedor TTS '{name}' registrado")
+        print(f"Proveedor TTS '{name}' registrado")

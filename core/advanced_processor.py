@@ -172,17 +172,17 @@ class AdvancedAudioProcessor:
         # Obtener configuración de voz
         voice_config = self.voice_manager.get_profile(voice_id)
         if not voice_config:
-            print(f"⚠️ Voz no encontrada: {voice_id}, usando default")
+            print(f"Voz no encontrada: {voice_id}, usando default")
             voice_config = self.voice_manager.get_profile("base_male")
         
         # Verificar si la voz está habilitada
         if not voice_config.enabled:
-            print(f"⚠️ Voz deshabilitada: {voice_id}")
+            print(f"Voz deshabilitada: {voice_id}")
             return None
         
         try:
             # 1. TTS → Audio neutral
-            print("  1️⃣ Generando TTS...")
+            print("Generando TTS...")
             
             # Debug: verificar tipo de tts_config
             # Actualizar config y sintetizar
@@ -285,12 +285,12 @@ class AdvancedAudioProcessor:
             pause = np.zeros(int(target_sr * 0.1), dtype=np.float32)
             final_audio = np.concatenate([final_audio, pause])
             
-            print(f"  ✅ Segmento procesado: {len(final_audio)/target_sr:.2f}s")
+            print(f"Segmento procesado: {len(final_audio)/target_sr:.2f}s")
             
             return final_audio.astype(np.float32)
             
         except Exception as e:
-            print(f"  ❌ Error procesando voz: {e}")
+            print(f"Error procesando voz: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -400,4 +400,4 @@ if __name__ == "__main__":
     # Guardar
     output_file = "test_advanced_message.wav"
     sf.write(output_file, audio, sr)
-    print(f"\n✅ Audio guardado: {output_file}")
+    print(f"\nAudio guardado: {output_file}")

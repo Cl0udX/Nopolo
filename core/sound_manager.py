@@ -56,7 +56,7 @@ class SoundManager:
     def _load_config(self):
         """Carga la configuración de sonidos desde JSON"""
         if not self.config_file.exists():
-            print(f"⚠️ Archivo de sonidos no encontrado: {self.config_file}")
+            print(f"Archivo de sonidos no encontrado: {self.config_file}")
             print("   Creando configuración vacía...")
             self._create_default_config()
             return
@@ -79,12 +79,12 @@ class SoundManager:
                     self.sounds_by_name[sound_name.lower()] = sound
             
             if sounds:
-                print(f"✅ Cargados {len(sounds)} sonidos desde {self.config_file}")
+                print(f"Cargados {len(sounds)} sonidos desde {self.config_file}")
             else:
-                print(f"📝 Configuración de sonidos cargada (vacía) - usa 'Importar Sonidos' para agregar")
+                print(f"Configuración de sonidos cargada (vacía) - usa 'Importar Sonidos' para agregar")
             
         except Exception as e:
-            print(f"❌ Error cargando configuración de sonidos: {e}")
+            print(f"Error cargando configuración de sonidos: {e}")
             self._create_default_config()
     
     def _create_default_config(self):
@@ -104,8 +104,8 @@ class SoundManager:
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(default_config, f, indent=2, ensure_ascii=False)
         
-        print(f"✅ Configuración de sonidos creada: {self.config_file}")
-        print(f"   � Archivo vacío - usa 'Importar Sonidos' para agregar archivos")
+        print(f"Configuración de sonidos creada: {self.config_file}")
+        print(f"Archivo vacío - usa 'Importar Sonidos' para agregar archivos")
         
         # Limpiar índices (archivo vacío)
         self.sounds_by_id = {}
@@ -156,7 +156,7 @@ class SoundManager:
             sound_path = self.sounds_dir / filename
         
         if not sound_path.exists():
-            print(f"⚠️ Archivo de sonido no encontrado: {sound_path}")
+            print(f"Archivo de sonido no encontrado: {sound_path}")
             return None
         
         return sound_path
@@ -179,7 +179,7 @@ class SoundManager:
             audio_data, sample_rate = sf.read(str(sound_path), dtype='float32')
             return (audio_data, sample_rate)
         except Exception as e:
-            print(f"❌ Error cargando sonido {identifier}: {e}")
+            print(f"Error cargando sonido {identifier}: {e}")
             return None
     
     def list_sounds(self, category: Optional[str] = None) -> List[Dict]:
@@ -216,12 +216,12 @@ class SoundManager:
         """
         # Validar que el ID no exista
         if sound_id in self.sounds_by_id:
-            print(f"❌ Ya existe un sonido con ID {sound_id}")
+            print(f"Ya existe un sonido con ID {sound_id}")
             return False
         
         # Validar que el nombre no tenga espacios
         if ' ' in name:
-            print(f"❌ El nombre no puede tener espacios: {name}")
+            print(f"El nombre no puede tener espacios: {name}")
             return False
         
         # Cargar config actual
@@ -246,7 +246,7 @@ class SoundManager:
         # Recargar
         self._load_config()
         
-        print(f"✅ Sonido agregado: {name} (ID: {sound_id})")
+        print(f"Sonido agregado: {name} (ID: {sound_id})")
         return True
     
     def sound_exists(self, identifier: str) -> bool:
@@ -274,7 +274,7 @@ class SoundManager:
         try:
             # Leer configuración actual
             if not self.config_file.exists():
-                print(f"❌ No existe archivo de configuración: {self.config_file}")
+                print(f"No existe archivo de configuración: {self.config_file}")
                 return False
             
             with open(self.config_file, 'r', encoding='utf-8') as f:
@@ -287,7 +287,7 @@ class SoundManager:
             sounds = [s for s in sounds if str(s.get("id")) != str(sound_id)]
             
             if len(sounds) == original_len:
-                print(f"⚠️ Sonido con ID '{sound_id}' no encontrado")
+                print(f"Sonido con ID '{sound_id}' no encontrado")
                 return False
             
             # Guardar configuración actualizada
@@ -298,11 +298,11 @@ class SoundManager:
             # Recargar configuración
             self._load_config()
             
-            print(f"✅ Sonido '{sound_id}' eliminado correctamente")
+            print(f"Sonido '{sound_id}' eliminado correctamente")
             return True
             
         except Exception as e:
-            print(f"❌ Error eliminando sonido: {e}")
+            print(f"Error eliminando sonido: {e}")
             return False
 
 
@@ -310,16 +310,16 @@ class SoundManager:
 if __name__ == "__main__":
     manager = SoundManager()
     
-    print("\n📢 Sonidos disponibles:")
+    print("\nSonidos disponibles:")
     for sound in manager.list_sounds():
         print(f"  [{sound['id']}] {sound['name']} - {sound['filename']}")
     
-    print("\n🔍 Buscar sonido 'disparo':")
+    print("\nBuscar sonido 'disparo':")
     info = manager.get_sound("disparo")
     if info:
         print(f"  Encontrado: {info}")
     
-    print("\n🔍 Buscar sonido por ID '2':")
+    print("\nBuscar sonido por ID '2':")
     info = manager.get_sound("2")
     if info:
-        print(f"  Encontrado: {info}")
+        print(f"Encontrado: {info}")
