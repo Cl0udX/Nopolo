@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nopolo TTS Overlay</title>
+    <link rel="stylesheet" href="/static/overlay.css">
+</head>
+<body>
+    <div id="tts-container" class="hidden">
+        <div id="voice-label"></div>
+        <div id="text-content"></div>
+    </div>
+
+    <script>
+        // Configuración (se puede modificar desde parámetros URL)
+        const urlParams = new URLSearchParams(window.location.search);
+        const showMode = urlParams.get('mode') || 'normal'; // normal, nopolo, voice
+        const wsPort = urlParams.get('port') || '8765';
+        
+        // Elementos del DOM
+        const container = document.getElementById('tts-container');
+        const voiceLabel = document.getElementById('voice-label');
+        const textContent = document.getElementById('text-content');
+        
+        // Conexión WebSocket
+        let ws;
+        let reconnectInterval;
+        
+        function connect() {
+            ws = new WebSocket(`ws://localhost:${wsPort}/ws`);
+            
+            ws.onopen = () => {
+                console.log('✅ Conectado al servidor Nopolo TTS');
+                clearInterval(reconnectInterval);
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
+            };
+            
+            ws.onclose = () => {
+                console.log('🔌 Desconectado del servidor');
+                // Intentar reconectar cada 3 segundos
+                reconnectInterval = setInterval(() => {
+                    console.log('🔄 Intentando reconectar...');
+                    connect();
+                }, 3000);
+            };
+        }
+        
+        function handleMessage(data) {
+            if (data.type === 'tts_start') {
+                showTTS(data.text, data.voice, data.is_nopolo || false);
+            } else if (data.type === 'tts_stop') {
+                hideTTS();
+            }
+        }
+        
+        function showTTS(text, voice, isNopolo) {
+            // Limpiar contenido anterior
+            voiceLabel.textContent = '';
+            textContent.textContent = '';
+            
+            // Mostrar nombre de voz si está disponible
+            if (voice) {
+                voiceLabel.textContent = voice;
+                voiceLabel.style.display = 'block';
+            } else {
+                voiceLabel.style.display = 'none';
+            }
+            
+            // Mostrar texto según si es Nopolo o no
+            if (isNopolo) {
+                // Modo Nopolo: resaltar sintaxis
+                textContent.innerHTML = highlightNopoloSyntax(text);
+            } else {
+                // Modo normal: limpiar sintaxis
+                textContent.textContent = cleanNopoloSyntax(text);
+            }
+            
+            // Mostrar container con animación
+            container.classList.remove('hidden');
+            container.classList.add('show');
+        }
+        
+        function hideTTS() {
+            // Ocultar con animación
+            container.classList.remove('show');
+            container.classList.add('hiding');
+            
+            setTimeout(() => {
+                container.classList.remove('hiding');
+                container.classList.add('hidden');
+            }, 500); // Duración de la animación de salida
+        }
+        
+        function cleanNopoloSyntax(text) {
+            // Remover sintaxis Nopolo para mostrar solo el texto limpio
+            // Remover voces: "voz:" o "voz.filtro:"
+            text = text.replace(/\w+(\.\w+)?:\s*/g, '');
+            // Remover sonidos: "(sonido)" o "(sonido.filtro)"
+            text = text.replace(/\([^)]+\)/g, '');
+            return text.trim();
+        }
+        
+        function highlightNopoloSyntax(text) {
+            // Resaltar sintaxis Nopolo con colores
+            let highlighted = text;
+            
+            // Resaltar voces: voz: o voz.filtro:
+            highlighted = highlighted.replace(/(\w+(\.\w+)?:)/g, '<span class="voice">$1</span>');
+            
+            // Resaltar sonidos: (sonido) o (sonido.filtro)
+            highlighted = highlighted.replace(/(\([^)]+\))/g, '<span class="sound">$1</span>');
+            
+            return highlighted;
+        }
+        
+        // Conectar al iniciar
+        connect();
+        
+        // Mensaje de conexión para debugging
+        console.log('🎙️ Nopolo TTS Overlay iniciado');
+        console.log(`📺 Modo: ${showMode}`);
+        console.log(`🔌 WebSocket: ws://localhost:${wsPort}/ws`);
+    </script>
+</body>
+</html>

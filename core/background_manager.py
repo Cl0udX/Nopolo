@@ -230,6 +230,45 @@ class BackgroundManager:
             self.backgrounds[bg_id]['volume'] = max(0.0, min(1.0, volume))
             self._save_config()
     
+    def update_background(self, bg_id: str, name: str = None, path: str = None,
+                         description: str = None, volume: float = None):
+        """
+        Actualiza un fondo existente.
+        
+        Args:
+            bg_id: ID del fondo a actualizar
+            name: Nuevo nombre (opcional)
+            path: Nueva ruta (opcional)
+            description: Nueva descripción (opcional)
+            volume: Nuevo volumen (opcional)
+        """
+        if bg_id not in self.backgrounds:
+            raise ValueError(f"Fondo '{bg_id}' no encontrado")
+        
+        bg = self.backgrounds[bg_id]
+        
+        # Actualizar campos proporcionados
+        if name is not None:
+            # Remover del índice por nombre anterior
+            old_name = bg['name'].lower()
+            if old_name in self.backgrounds_by_name:
+                del self.backgrounds_by_name[old_name]
+            # Actualizar nombre
+            bg['name'] = name
+            self.backgrounds_by_name[name.lower()] = bg
+        
+        if path is not None:
+            bg['path'] = path
+        
+        if description is not None:
+            bg['description'] = description
+        
+        if volume is not None:
+            bg['volume'] = max(0.0, min(1.0, volume))
+        
+        # Guardar configuración
+        self._save_config()
+    
     def list_backgrounds(self) -> Dict[str, Dict]:
         """
         Lista todos los fondos disponibles.

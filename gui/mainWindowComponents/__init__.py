@@ -13,6 +13,7 @@ from .voice_mixin import VoiceMixin
 from .playback_mixin import PlaybackMixin
 from .controls_mixin import ControlsMixin
 from .system_config_mixin import SystemConfigMixin
+from .overlay_mixin import OverlayMixin
 
 __all__ = [
     'ConsoleRedirector',
@@ -26,5 +27,6 @@ __all__ = [
     'PlaybackMixin',
     'ControlsMixin',
     'SystemConfigMixin',
+    'OverlayMixin',
 ]
 

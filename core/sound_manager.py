@@ -249,6 +249,60 @@ class SoundManager:
         print(f"Sonido agregado: {name} (ID: {sound_id})")
         return True
     
+    def update_sound(self, sound_id: str, name: str = None, filename: str = None,
+                    category: str = None, duration_ms: int = None) -> bool:
+        """
+        Actualiza un sonido existente.
+        
+        Args:
+            sound_id: ID del sonido a actualizar
+            name: Nuevo nombre (opcional)
+            filename: Nuevo archivo (opcional)
+            category: Nueva categoría (opcional)
+            duration_ms: Nueva duración (opcional)
+            
+        Returns:
+            True si se actualizó correctamente, False si no existe
+        """
+        if sound_id not in self.sounds_by_id:
+            print(f"Sonido con ID {sound_id} no encontrado")
+            return False
+        
+        # Cargar config actual
+        with open(self.config_file, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        
+        # Buscar y actualizar el sonido
+        for sound in config["sounds"]:
+            if sound["id"] == sound_id:
+                # Actualizar campos proporcionados
+                if name is not None:
+                    if ' ' in name:
+                        print(f"El nombre no puede tener espacios: {name}")
+                        return False
+                    sound["name"] = name
+                
+                if filename is not None:
+                    sound["filename"] = filename
+                
+                if category is not None:
+                    sound["category"] = category
+                
+                if duration_ms is not None:
+                    sound["duration_ms"] = duration_ms
+                
+                break
+        
+        # Guardar
+        with open(self.config_file, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        
+        # Recargar
+        self._load_config()
+        
+        print(f"Sonido actualizado: {sound_id}")
+        return True
+    
     def sound_exists(self, identifier: str) -> bool:
         """
         Verifica si un sonido existe.

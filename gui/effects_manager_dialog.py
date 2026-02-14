@@ -440,22 +440,45 @@ class EffectEditorDialog(QDialog):
         try:
             if is_background:
                 volume = self.spinbox_volume.value()
-                self.background_manager.add_background(
-                    bg_id=effect_id,
-                    name=name,
-                    path=file_path,
-                    description=description,
-                    volume=volume
-                )
+                
+                if self.is_new:
+                    # Crear nuevo fondo
+                    self.background_manager.add_background(
+                        bg_id=effect_id,
+                        name=name,
+                        path=file_path,
+                        description=description,
+                        volume=volume
+                    )
+                else:
+                    # Actualizar fondo existente
+                    self.background_manager.update_background(
+                        bg_id=effect_id,
+                        name=name,
+                        path=file_path,
+                        description=description,
+                        volume=volume
+                    )
             else:
                 # Para sonidos, usar solo el nombre del archivo
                 filename = os.path.basename(file_path)
-                self.sound_manager.add_sound(
-                    sound_id=effect_id,
-                    name=name,
-                    filename=filename,
-                    category=description or "custom"
-                )
+                
+                if self.is_new:
+                    # Crear nuevo sonido
+                    self.sound_manager.add_sound(
+                        sound_id=effect_id,
+                        name=name,
+                        filename=filename,
+                        category=description or "custom"
+                    )
+                else:
+                    # Actualizar sonido existente
+                    self.sound_manager.update_sound(
+                        sound_id=effect_id,
+                        name=name,
+                        filename=filename,
+                        category=description or "custom"
+                    )
             
             QMessageBox.information(self, "Éxito", f"{'Fondo' if is_background else 'Sonido'} guardado correctamente")
             self.accept()

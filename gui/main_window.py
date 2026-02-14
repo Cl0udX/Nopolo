@@ -23,6 +23,7 @@ from gui.mainWindowComponents import (
     PlaybackMixin,
     ControlsMixin,
     SystemConfigMixin,
+    OverlayMixin,
 )
 import sys
 
@@ -38,6 +39,7 @@ class MainWindow(
     PlaybackMixin,
     ControlsMixin,
     SystemConfigMixin,
+    OverlayMixin,
     QWidget
 ):
     """Ventana principal de la aplicación Nopolo"""

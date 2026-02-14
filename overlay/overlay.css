@@ -1,0 +1,284 @@
+/* 
+ * Nopolo TTS Overlay - CSS Personalizable
+ * 
+ * Puedes modificar este archivo para cambiar la apariencia del overlay en OBS.
+ * Los cambios se aplicarán automáticamente al recargar el navegador en OBS.
+ */
+
+/* ========================================
+   CONFIGURACIÓN GENERAL
+   ======================================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+    font-family: 'Segoe UI', 'Arial', 'Roboto', sans-serif;
+    background: transparent;
+    overflow: hidden;
+}
+
+/* ========================================
+   CONTENEDOR PRINCIPAL
+   ======================================== */
+
+#tts-container {
+    background: linear-gradient(135deg, rgba(30, 30, 40, 0.95), rgba(20, 20, 30, 0.95));
+    backdrop-filter: blur(15px);
+    border-radius: 20px;
+    padding: 25px 35px;
+    box-shadow: 
+        0 10px 40px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(138, 180, 248, 0.3);
+    max-width: 900px;
+    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    transform-origin: bottom center;
+    position: relative;
+}
+
+/* Brillo sutil en el borde */
+#tts-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 18px;
+    padding: 2px;
+    background: linear-gradient(45deg, rgba(138, 180, 248, 0.3), rgba(180, 138, 248, 0.3));
+    -webkit-mask: 
+        linear-gradient(#fff 0 0) content-box, 
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+#tts-container:hover::before {
+    opacity: 1;
+}
+
+/* Estados del contenedor */
+#tts-container.hidden {
+    opacity: 0;
+    transform: translateY(50px) scale(0.8);
+    pointer-events: none;
+}
+
+#tts-container.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+#tts-container.hiding {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.95);
+}
+
+/* ========================================
+   ETIQUETA DE VOZ
+   ======================================== */
+
+#voice-label {
+    color: #8ab4f8;
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid rgba(138, 180, 248, 0.4);
+    display: none; /* Oculto por defecto, se muestra según el modo */
+    text-shadow: 
+        0 0 15px rgba(138, 180, 248, 0.6),
+        0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ========================================
+   CONTENIDO DE TEXTO
+   ======================================== */
+
+#text-content {
+    color: #ffffff;
+    font-size: 32px;
+    font-weight: 500;
+    line-height: 1.6;
+    text-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.8),
+        0 0 20px rgba(255, 255, 255, 0.1);
+    letter-spacing: 0.5px;
+    font-size: 28px;
+    font-weight: 500;
+    line-height: 1.6;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    word-wrap: break-word;
+    animation: fadeInText 0.3s ease-out;
+}
+
+@keyframes fadeInText {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========================================
+   SINTAXIS NOPOLO (Modo Nopolo)
+   ======================================== */
+
+/* Voces resaltadas */
+#text-content .voice {
+    color: #66d9ef;
+    font-weight: 700;
+    background: rgba(102, 217, 239, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Sonidos resaltados */
+#text-content .sound {
+    color: #f92672;
+    font-weight: 700;
+    background: rgba(249, 38, 114, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* ========================================
+   ANIMACIONES ADICIONALES
+   ======================================== */
+
+/* Pulso sutil en el borde */
+@keyframes borderPulse {
+    0%, 100% {
+        border-color: rgba(102, 126, 234, 0.5);
+    }
+    50% {
+        border-color: rgba(102, 126, 234, 0.8);
+    }
+}
+
+#tts-container.show {
+    animation: borderPulse 2s infinite;
+}
+
+/* Efecto de brillo en el texto */
+@keyframes textGlow {
+    0%, 100% {
+        text-shadow: 
+            2px 2px 4px rgba(0, 0, 0, 0.8),
+            0 0 10px rgba(255, 255, 255, 0.1);
+    }
+    50% {
+        text-shadow: 
+            2px 2px 4px rgba(0, 0, 0, 0.8),
+            0 0 20px rgba(255, 255, 255, 0.2);
+    }
+}
+
+#text-content {
+    animation: textGlow 3s infinite;
+}
+
+/* ========================================
+   PERSONALIZACIÓN RESPONSIVE
+   ======================================== */
+
+@media (max-width: 768px) {
+    #tts-container {
+        padding: 15px 20px;
+        max-width: 90vw;
+    }
+    
+    #text-content {
+        font-size: 22px;
+    }
+    
+    #voice-label {
+        font-size: 16px;
+    }
+}
+
+/* ========================================
+   TEMAS ALTERNATIVOS (Comentados)
+   Descomenta el que prefieras
+   ======================================== */
+
+/* TEMA MINIMALISTA */
+/*
+#tts-container {
+    background: rgba(255, 255, 255, 0.95);
+    border: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+#text-content {
+    color: #333;
+    text-shadow: none;
+}
+
+#voice-label {
+    color: #667eea;
+    text-shadow: none;
+}
+*/
+
+/* TEMA NEÓN */
+/*
+#tts-container {
+    background: rgba(10, 10, 20, 0.95);
+    border: 2px solid #00ffff;
+    box-shadow: 
+        0 0 20px rgba(0, 255, 255, 0.5),
+        inset 0 0 20px rgba(0, 255, 255, 0.1);
+}
+
+#text-content {
+    color: #00ffff;
+    text-shadow: 
+        0 0 10px rgba(0, 255, 255, 0.8),
+        0 0 20px rgba(0, 255, 255, 0.5);
+}
+
+#voice-label {
+    color: #ff00ff;
+    text-shadow: 
+        0 0 10px rgba(255, 0, 255, 0.8);
+}
+*/
+
+/* TEMA RETRO GAMING */
+/*
+#tts-container {
+    background: #000;
+    border: 4px solid #0f0;
+    box-shadow: 
+        0 0 0 2px #000,
+        0 0 0 4px #0f0,
+        0 0 20px rgba(0, 255, 0, 0.5);
+    font-family: 'Courier New', monospace;
+}
+
+#text-content {
+    color: #0f0;
+    text-shadow: 0 0 5px rgba(0, 255, 0, 0.8);
+}
+
+#voice-label {
+    color: #ff0;
+    text-shadow: 0 0 5px rgba(255, 255, 0, 0.8);
+}
+*/

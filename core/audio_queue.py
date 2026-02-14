@@ -20,15 +20,17 @@ class AudioQueue:
         self.worker_thread.start()
         print("Cola de audio iniciada")
     
-    def add(self, text: str, voice_profile: Optional[VoiceProfile] = None):
+    def add(self, text: str, voice_profile: Optional[VoiceProfile] = None, voice_name: str = "", main_window=None):
         """
         Agrega texto a la cola para procesamiento.
         
         Args:
             text: Texto a sintetizar
             voice_profile: Perfil de voz a usar (opcional)
+            voice_name: Nombre de la voz para el overlay
+            main_window: Referencia a la ventana principal para enviar eventos overlay
         """
-        self.queue.put((text, voice_profile))
+        self.queue.put((text, voice_profile, voice_name, main_window))
     
     def stop_current(self):
         """Detiene el audio que está sonando actualmente"""
@@ -57,9 +59,13 @@ class AudioQueue:
     def _worker(self):
         """Worker thread que procesa la cola"""
         while True:
-            text, voice_profile = self.queue.get()
+            text, voice_profile, voice_name, main_window = self.queue.get()
             
             try:
+                # Enviar evento de inicio al overlay (modo normal = is_nopolo False)
+                if main_window and hasattr(main_window, '_send_overlay_event'):
+                    main_window._send_overlay_event(text, voice_name, is_nopolo=False)
+                
                 # Paso 1: TTS (voz neutral)
                 if voice_profile and voice_profile.tts_config:
                     # Actualizar config del engine (esto cambia provider si es necesario)
@@ -85,6 +91,10 @@ class AudioQueue:
                 
                 # Paso 3: Reproducir
                 play_wav(converted_wav)
+                
+                # Enviar evento de fin al overlay
+                if main_window and hasattr(main_window, '_clear_overlay'):
+                    main_window._clear_overlay()
                 
             except Exception as e:
                 print(f"Error en cola de audio: {e}")

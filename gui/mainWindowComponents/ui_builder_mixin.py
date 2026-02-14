@@ -150,6 +150,11 @@ class UIBuilderMixin:
         
         center_panel.addLayout(manage_layout)
         
+        # Panel de Overlay para OBS (desde OverlayMixin)
+        if hasattr(self, '_build_overlay_panel'):
+            overlay_panel = self._build_overlay_panel()
+            center_panel.addWidget(overlay_panel)
+        
         # Espacio flexible
         center_panel.addStretch()
         

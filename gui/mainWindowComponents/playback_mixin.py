@@ -23,9 +23,11 @@ class PlaybackMixin:
             # Modo tradicional: usar cola de audio (ya es no bloqueante)
             profile_id = self.voice_combo.currentData()
             profile = self.voice_manager.get_profile(profile_id)
+            voice_name = profile.display_name if profile else ""
             
+            # NO enviar evento aquí, se enviará cuando realmente empiece a reproducir
             # Agregar a la cola
-            self.audio_queue.add(text, profile)
+            self.audio_queue.add(text, profile, voice_name, self)
     
     def _play_multivoice(self, text: str):
         """Procesa y reproduce audio multi-voz en thread separado"""
@@ -34,7 +36,7 @@ class PlaybackMixin:
             import sounddevice as sd
             import tempfile
             
-            # Procesar mensaje
+            # Procesar mensaje PRIMERO (esto toma tiempo)
             audio_data, sample_rate = self.advanced_processor.process_message(text)
             
             # Guardar temporalmente
@@ -42,9 +44,17 @@ class PlaybackMixin:
             temp_file.close()
             sf.write(temp_file.name, audio_data, sample_rate)
             
-            # Reproducir
+            # Enviar evento al overlay JUSTO ANTES de reproducir (modo Nopolo = True)
+            if hasattr(self, '_send_overlay_event'):
+                self._send_overlay_event(text, "Multi-Voz", is_nopolo=True)
+            
+            # Reproducir (ahora el texto aparece sincronizado con el audio)
             sd.play(audio_data, sample_rate)
             sd.wait()
+            
+            # Limpiar overlay cuando termina
+            if hasattr(self, '_clear_overlay'):
+                self._clear_overlay()
             
             # Limpiar archivo temporal
             import os
