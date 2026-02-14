@@ -13,7 +13,7 @@
       "type": "google_tts",
       "enabled": true,
       "requires_credentials": true,
-      "credentials": "C:/Users/Santiago/Downloads/imperial-audio-468104-u9-d6caa669a9db.json",
+      "credentials": "/Users/santo/Downloads/imperial-audio-468104-u9-6dcba089ee20.json",
       "icon": "🌐"
     }
   }

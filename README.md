@@ -111,11 +111,134 @@ StreamTTS/
 - [x] Soporte multiplataforma (Windows, Linux, macOS)
 - [x] API REST con documentación interactiva
 - [x] Multi-provider TTS (Edge TTS + Google Cloud TTS)
-- [ ] Soporte para múltiples voces por mensaje
-- [ ] Sistema de efectos de sonido
+- [x] Soporte para múltiples voces por mensaje (sintaxis Mopolo)
+- [x] Sistema de efectos de sonido integrado
+- [x] Filtros de audio (reverb, phone, pitch, robot, etc.)
+- [x] Filtros de fondo (ambiente/contexto durante la voz)
+- [ ] Endpoint API `/synthesize/advanced` para mensajes complejos
 - [ ] Integración directa con Streamer.bot
 - [ ] Configuración avanzada desde la interfaz
 - [ ] Optimización de latencia
+
+---
+
+## 🎭 Mensajes Multi-Voz (Formato Mopolo)
+
+Nopolo soporta mensajes complejos con múltiples voces, efectos de sonido y filtros de audio usando la sintaxis de Mopolo TTS.
+
+### Sintaxis Básica
+
+**Voces:**
+```
+nombre: texto a decir
+id: texto a decir
+```
+
+**Sonidos:**
+```
+(nombre_sonido)
+(id_sonido)
+```
+
+**Filtros de Audio:**
+```
+nombre.filtro: texto con filtro
+nombre.filtro1.filtro2: texto con múltiples filtros
+```
+
+### Filtros Disponibles
+
+| ID  | Nombre      | Descripción                    | Ejemplo                |
+|-----|-------------|--------------------------------|------------------------|
+| r   | Reverb      | Eco/reverberación              | `dross.r: con eco`     |
+| p   | Phone       | Llamada telefónica             | `enrique.p: alló`      |
+| pu  | Pitch Up    | Voz más aguda (+5 semitonos)   | `homero.pu: chiflado`  |
+| pd  | Pitch Down  | Voz más grave (-5 semitonos)   | `dross.pd: profundo`   |
+| m   | Muffled     | Voz apagada/de lejos           | `5.m: desde afuera`    |
+| a   | Robot       | Voz robótica/android           | `robot.a: beep boop`   |
+| l   | Distortion  | Voz saturada/distorsionada     | `metal.l: gritando`    |
+
+### Filtros de Fondo
+
+Mezclan un audio de ambiente/contexto **durante** toda la frase:
+
+| ID  | Nombre        | Descripción                    | Ejemplo                        |
+|-----|---------------|--------------------------------|--------------------------------|
+| fa  | Calle         | Tráfico y ambiente urbano      | `dross.fa: en la calle`        |
+| fb  | Lluvia        | Sonido de lluvia               | `narrador.fb: bajo la lluvia`  |
+| fc  | Multitud      | Restaurante/lugar público      | `streamer.fc: en el evento`    |
+| fd  | Naturaleza    | Viento, playa, pájaros         | `5.fd: en la playa`            |
+| fe  | Personalizado | Definido por el usuario        | `voz.fe: con fondo custom`     |
+
+**Nota:** Los archivos de fondo se configuran en `config/backgrounds.json` y se colocan en la carpeta `backgrounds/`.
+
+### Ejemplos Completos
+
+**Conversación simple:**
+```
+dross: hola amigos (disparo) homero: doh!
+```
+
+**Con filtros:**
+```
+enrique.p: alló, te puedo escuchar? dross.r: si, con eco
+```
+
+**Con fondos:**
+```
+reportero.fa: estamos en vivo desde la calle principal (sirena) testigo.m: escuche todo desde adentro
+```
+
+**Combinando todo:**
+```
+dross: bienvenidos al video (aplauso) narrador.fb.r: era una noche lluviosa homero.pu: doh! (risa)
+```
+
+### Configuración de Efectos
+
+**Sonidos** (`config/sounds.json`):
+```json
+{
+  "sounds": {
+    "1": {
+      "id": "1",
+      "name": "disparo",
+      "path": "sounds/disparo.wav"
+    }
+  }
+}
+```
+
+**Fondos** (`config/backgrounds.json`):
+```json
+{
+  "backgrounds": {
+    "fa": {
+      "id": "fa",
+      "name": "calle",
+      "path": "backgrounds/calle.wav",
+      "volume": 0.3
+    }
+  }
+}
+```
+
+### Scripts de Prueba
+
+**Generar fondos de prueba:**
+```bash
+python test_background_filters.py
+```
+Este script genera:
+- Archivos de audio de fondo sintéticos (calle, lluvia, multitud, naturaleza)
+- Ejemplos de voz mezclada con cada fondo
+- Todos los archivos en `test_backgrounds/` y `backgrounds/`
+
+**Ver ejemplos de uso:**
+```bash
+python example_backgrounds.py
+```
+Muestra la sintaxis completa y ejemplos de mensajes multi-voz con fondos.
 
 ---
 

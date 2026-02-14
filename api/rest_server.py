@@ -15,6 +15,7 @@ from core.voice_manager import VoiceManager
 from core.audio_queue import AudioQueue
 from core.tts_engine import TTSEngine
 from core.rvc_engine import RVCEngine
+from core.advanced_processor import AdvancedAudioProcessor
 
 
 # ==================== Modelos Pydantic ====================
@@ -33,6 +34,26 @@ class TTSRequest(BaseModel):
                 "priority": 0
             }
         }
+
+
+class AdvancedTTSRequest(BaseModel):
+    """Request para sintetizar mensajes multi-voz con efectos"""
+    message: str = Field(..., description="Mensaje con formato Mopolo (multi-voz + efectos)", min_length=1, max_length=10000)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "dross: hola amigos (disparo) homero: doh! reportero.fa: estamos en vivo"
+            }
+        }
+
+
+class AdvancedTTSResponse(BaseModel):
+    """Respuesta de síntesis avanzada"""
+    success: bool
+    message: str
+    audio_duration: float
+    segments_processed: int
 
 
 class VoiceProfileResponse(BaseModel):
@@ -64,11 +85,21 @@ class TTSAPIServer:
     """Servidor REST API para TTS"""
     
     def __init__(self, voice_manager: VoiceManager, audio_queue: AudioQueue, 
+                 tts_engine: TTSEngine = None, rvc_engine: RVCEngine = None,
                  host: str = "0.0.0.0", port: int = 8000):
         self.voice_manager = voice_manager
         self.audio_queue = audio_queue
+        self.tts_engine = tts_engine or TTSEngine()
+        self.rvc_engine = rvc_engine or RVCEngine()
         self.host = host
         self.port = port
+        
+        # Crear procesador avanzado para mensajes multi-voz
+        self.advanced_processor = AdvancedAudioProcessor(
+            voice_manager=self.voice_manager,
+            tts_engine=self.tts_engine,
+            rvc_engine=self.rvc_engine
+        )
         
         # Crear app FastAPI
         self.app = FastAPI(
@@ -218,6 +249,52 @@ class TTSAPIServer:
                     break
             
             return {"success": True, "message": "Queue cleared"}
+        
+        @self.app.post("/api/synthesize/advanced")
+        async def synthesize_advanced(request: AdvancedTTSRequest):
+            """
+            Sintetiza mensajes complejos con múltiples voces, efectos de sonido y filtros.
+            
+            Soporta sintaxis Mopolo:
+            - **Voces**: `nombre: texto` o `id: texto`
+            - **Sonidos**: `(nombre)` o `(id)`
+            - **Filtros**: `nombre.filtro: texto` (r, p, pu, pd, m, a, l)
+            - **Fondos**: `nombre.fa: texto` (fa, fb, fc, fd, fe)
+            
+            Ejemplo: `"dross: hola (disparo) homero: doh! reportero.fa: en vivo"`
+            
+            Retorna el archivo de audio WAV directamente.
+            """
+            try:
+                import tempfile
+                import soundfile as sf
+                from fastapi.responses import FileResponse
+                import os
+                
+                # Procesar mensaje con el procesador avanzado
+                audio_data, sample_rate = self.advanced_processor.process_message(request.message)
+                
+                # Guardar audio temporalmente
+                temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                temp_file.close()
+                
+                sf.write(temp_file.name, audio_data, sample_rate)
+                
+                # Retornar archivo de audio
+                return FileResponse(
+                    temp_file.name,
+                    media_type="audio/wav",
+                    filename="advanced_audio.wav",
+                    headers={
+                        "X-Audio-Duration": str(len(audio_data) / sample_rate),
+                        "X-Segments-Processed": str(len(self.advanced_processor.parser.parse(request.message)))
+                    }
+                )
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
     
     def start(self):
         """Inicia el servidor en un thread separado"""
