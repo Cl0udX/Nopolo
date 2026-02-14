@@ -40,25 +40,26 @@ class ProviderManager:
     
     def add_provider(self, provider_type: str, credentials_path: Optional[str] = None) -> bool:
         """
-        Agrega un nuevo proveedor TTS.
+        Agrega o actualiza un proveedor TTS.
         
         Args:
             provider_type: 'google_tts', 'elevenlabs', etc.
             credentials_path: Ruta al archivo de credenciales (JSON para Google)
             
         Returns:
-            True si se agregó exitosamente
+            True si se agregó/actualizó exitosamente
         """
-        # Validar que no exista ya
-        if provider_type in self.providers:
-            print(f"⚠️ El proveedor {provider_type} ya está agregado")
-            return False
+        # Si ya existe, actualizar credenciales
+        is_update = provider_type in self.providers
         
-        # Configuración según tipo
-        provider_config = self._get_provider_template(provider_type)
-        if not provider_config:
-            print(f"❌ Tipo de proveedor desconocido: {provider_type}")
-            return False
+        if is_update:
+            provider_config = self.providers[provider_type]
+        else:
+            # Configuración según tipo
+            provider_config = self._get_provider_template(provider_type)
+            if not provider_config:
+                print(f"❌ Tipo de proveedor desconocido: {provider_type}")
+                return False
         
         # Validar credenciales si es necesario
         if provider_config["requires_credentials"]:
@@ -72,12 +73,14 @@ class ProviderManager:
                 return False
             
             provider_config["credentials"] = credentials_path
+            provider_config["enabled"] = True  # Habilitar al agregar credenciales
         
-        # Agregar provider
+        # Agregar o actualizar provider
         self.providers[provider_type] = provider_config
         self.save_to_file()
         
-        print(f"✅ Proveedor {provider_config['name']} agregado")
+        action = "actualizado" if is_update else "agregado"
+        print(f"✅ Proveedor {provider_config['name']} {action}")
         return True
     
     def remove_provider(self, provider_type: str) -> bool:

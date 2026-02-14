@@ -11,10 +11,11 @@
     "google_tts": {
       "name": "Google Cloud TTS",
       "type": "google_tts",
-      "enabled": true,
+      "enabled": false,
       "requires_credentials": true,
-      "credentials": "C:/Users/Santiago/Downloads/imperial-audio-468104-u9-d6caa669a9db.json",
-      "icon": "🌐"
+      "credentials": "path/to/your/google-credentials.json",
+      "icon": "🌐",
+      "_comment": "Para usar Google TTS: 1) Descarga tus credenciales de Google Cloud Console, 2) Guárdalas fuera del repo, 3) Actualiza 'credentials' con la ruta completa, 4) Cambia 'enabled' a true"
     }
   }
 }

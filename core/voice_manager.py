@@ -34,7 +34,6 @@ class VoiceManager:
             profile_id="base_male",
             display_name="Voz Base Masculina",
             tts_config=EdgeTTSConfig(
-                engine_type="edge_tts",
                 voice_id="es-MX-JorgeNeural",
                 speed=1.0,
                 pitch=0
@@ -48,7 +47,6 @@ class VoiceManager:
             profile_id="base_female",
             display_name="Voz Base Femenina",
             tts_config=EdgeTTSConfig(
-                engine_type="edge_tts",
                 voice_id="es-MX-DaliaNeural",
                 speed=1.0,
                 pitch=0
@@ -61,7 +59,7 @@ class VoiceManager:
             "base_male": base_male,
             "base_female": base_female,
         }
-        self.default_voice_id = "base_male"  # Cambiar de "homero" a "base_male"
+        self.default_voice_id = "base_male"
     
     def add_profile(self, profile: VoiceProfile) -> bool:
         """Agrega un nuevo perfil de voz"""
@@ -197,7 +195,6 @@ class VoiceManager:
             profile_id=profile_id,
             display_name=model_name.title(),
             tts_config=EdgeTTSConfig(
-                engine_type="edge_tts",
                 voice_id=base_voice,
                 speed=1.0,
                 pitch=0

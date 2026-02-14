@@ -1,23 +1,38 @@
-*.pyc
-# Modelos pesados (200MB+)
-*.pt
-*.pth
-*.index
-
-# Archivos temporales de audio
-*.wav
-*.mp3
-*.temp
-
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 *.so
 .Python
 .venv/
 venv/
 env/
+
+# Modelos pesados (200MB+)
+*.pt
+*.pth
+*.index
+voices/
+
+# Audio temporal
+*.wav
+*.mp3
+*.temp
+
+# Configuración local
+config/voices.json
+config/providers.json
+
+# Credenciales y claves (¡IMPORTANTE!)
+*credentials*.json
+*service-account*.json
+*service_account*.json
+*.pem
+*.key
+.env
+.env.local
+*.secret
 
 # IDE
 .vscode/
@@ -28,28 +43,3 @@ env/
 # Sistema
 .DS_Store
 Thumbs.db
-
-# Modelos pesados
-voices/
-*.pt
-*.pth
-*.index
-
-# Audio temporal
-*.wav
-*.mp3
-
-# Python
-__pycache__/
-*.pyc
-.venv/
-venv/
-
-# IDE
-.vscode/
-.idea/
-
-# Sistema
-.DS_Store
-
-config/voices.json

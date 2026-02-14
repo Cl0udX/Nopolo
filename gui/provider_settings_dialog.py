@@ -2,6 +2,7 @@
 Diálogo para configurar proveedores TTS.
 Permite agregar Google Cloud TTS, ElevenLabs, etc.
 """
+import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QFileDialog, QMessageBox, QGroupBox
@@ -122,20 +123,21 @@ class ProviderSettingsDialog(QDialog):
         if not file_path:
             return
         
-        # Intentar agregar
+        # Intentar agregar/actualizar
         if self.provider_manager.add_provider("google_tts", file_path):
             QMessageBox.information(
                 self,
                 "Éxito",
-                "Google Cloud TTS agregado correctamente.\n"
-                "Ahora puedes usarlo en la configuración de voces."
+                f"Google Cloud TTS configurado correctamente.\n\n"
+                f"Credenciales: {os.path.basename(file_path)}\n"
+                f"Ahora puedes usarlo en la configuración de voces."
             )
             self._load_providers()
         else:
             QMessageBox.critical(
                 self,
                 "Error",
-                "No se pudo agregar Google Cloud TTS.\n"
+                "No se pudo configurar Google Cloud TTS.\n"
                 "Verifica que el archivo JSON sea válido y tenga los permisos correctos."
             )
     
