@@ -28,11 +28,11 @@ class VoiceManager:
             self.save_to_file()
     
     def _create_default_config(self):
-        """Crea configuración por defecto con la voz Homero"""
+        """Crea configuración por defecto con las voces base"""
         # Voz base masculina sin transformer
         base_male = VoiceProfile(
             profile_id="base_male",
-            display_name="Voz Base Masculina",
+            display_name="VozBaseMasculina",
             tts_config=EdgeTTSConfig(
                 voice_id="es-MX-JorgeNeural",
                 speed=1.0,
@@ -45,7 +45,7 @@ class VoiceManager:
         # Voz base femenina sin transformer
         base_female = VoiceProfile(
             profile_id="base_female",
-            display_name="Voz Base Femenina",
+            display_name="VozBaseFemenina",
             tts_config=EdgeTTSConfig(
                 voice_id="es-MX-DaliaNeural",
                 speed=1.0,

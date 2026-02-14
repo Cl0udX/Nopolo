@@ -54,12 +54,34 @@ class VoiceProfile:
         """Deserializa desde diccionario"""
         # Reconstruir TTS config
         tts_data = data['tts_config']
-        engine_type = tts_data.get('engine_type', 'edge_tts')
         
-        if engine_type == 'edge_tts':
+        # Detectar el tipo de engine desde provider_name o engine_type
+        provider_name = tts_data.get('provider_name', tts_data.get('engine_type', 'edge_tts'))
+        
+        if provider_name == 'edge_tts':
             tts_config = EdgeTTSConfig.from_dict(tts_data)
+        elif provider_name == 'google_tts':
+            # Para Google TTS, crear una instancia básica con los campos necesarios
+            # GoogleTTSConfig no hereda de BaseTTSConfig, usa su propio constructor
+            from core.tts.google_provider import GoogleTTSConfig
+            tts_config = GoogleTTSConfig(
+                voice_id=tts_data.get('voice_id', 'es-US-Standard-C'),
+                language_code=tts_data.get('language_code', 'es-US'),
+                rate=tts_data.get('rate', '+0%'),
+                volume=tts_data.get('volume_str', '+0%'),
+                pitch=tts_data.get('pitch', 0),
+                sample_rate=tts_data.get('sample_rate', 24000),
+                credentials_path=tts_data.get('credentials_path', None)
+            )
         else:
-            tts_config = BaseTTSConfig.from_dict(tts_data)
+            # Para otros engines, usar BaseTTSConfig con solo campos básicos
+            tts_config = BaseTTSConfig(
+                voice_id=tts_data.get('voice_id', 'default'),
+                speed=tts_data.get('speed', 1.0),
+                pitch=tts_data.get('pitch', 0),
+                volume=tts_data.get('volume', 1.0),
+                sample_rate=tts_data.get('sample_rate', 44100)
+            )
         
         # Reconstruir RVC config
         rvc_config = None
@@ -88,6 +110,13 @@ class VoiceProfile:
     
     def validate(self) -> bool:
         """Valida que todos los componentes estén correctos"""
+        # Validar que profile_id y display_name no tengan espacios
+        if ' ' in self.profile_id:
+            raise ValueError(f"profile_id no puede contener espacios: '{self.profile_id}'")
+        if ' ' in self.display_name:
+            raise ValueError(f"display_name no puede contener espacios: '{self.display_name}'")
+        
+        # Validar RVC si existe
         if self.rvc_config:
             return self.rvc_config.validate()
         return True

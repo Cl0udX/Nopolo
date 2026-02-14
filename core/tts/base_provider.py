@@ -71,4 +71,7 @@ class BaseTTSProvider(ABC):
     
     def update_config(self, config):
         """Actualiza la configuración del provider"""
+        # Validar que config es un objeto, no un string
+        if isinstance(config, str):
+            raise TypeError(f"update_config esperaba un objeto de configuración, recibió string: '{config}'")
         self.config = config

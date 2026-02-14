@@ -40,6 +40,8 @@ def main():
     server = TTSAPIServer(
         voice_manager=voice_manager,
         audio_queue=audio_queue,
+        tts_engine=tts_engine,
+        rvc_engine=rvc_engine,
         host=args.host,
         port=args.port
     )

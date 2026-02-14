@@ -18,6 +18,9 @@ class RVCConfig:
     model_path: str                  # Ruta al archivo .pth
     index_path: Optional[str] = None # Ruta al archivo .index (opcional)
     
+    # Estado
+    enabled: bool = True             # Si está habilitado para usar
+    
     # Parámetros de conversión
     pitch_shift: int = 0             # Cambio de tono (-12 a +12 semitonos)
     index_rate: float = 0.75         # Influencia del índice (0.0-1.0)

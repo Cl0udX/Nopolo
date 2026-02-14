@@ -21,8 +21,11 @@ voices/
 *.temp
 
 # Configuración local
-config/voices.json
 config/providers.json
+config/voices.json
+config/backgrounds.json
+config/sounds.json
+
 
 # Credenciales y claves (¡IMPORTANTE!)
 *credentials*.json
@@ -43,3 +46,7 @@ config/providers.json
 # Sistema
 .DS_Store
 Thumbs.db
+
+config/backgrounds.json
+
+config/sounds.json

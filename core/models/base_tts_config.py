@@ -56,6 +56,17 @@ class EdgeTTSConfig(BaseTTSConfig):
         # Convertir volume (0.0-1.0) a volume string
         volume_percent = int((self.volume - 1.0) * 100)
         self.volume_str = f"{volume_percent:+d}%"
+    
+    @classmethod
+    def from_dict(cls, data: dict):
+        """Crea desde diccionario, extrayendo solo los parámetros necesarios"""
+        return cls(
+            voice_id=data.get('voice_id', 'es-MX-JorgeNeural'),
+            speed=data.get('speed', 1.0),
+            pitch=data.get('pitch', 0),
+            volume=data.get('volume', 1.0),
+            sample_rate=data.get('sample_rate', 44100)
+        )
 
 
 @dataclass  
