@@ -1,13 +1,27 @@
-// ========================================
-// TTS_Simple.cs
-// Envía texto básico al TTS con voz por defecto
-// ========================================
-// Referencias necesarias (agregar en Settings):
-// - System.dll
-// - System.Net.Sockets.dll
+// ═══════════════════════════════════════════════════════════════════════════
+// 📢 TTS_Simple.cs - VERSIÓN SIMPLIFICADA
+// ═══════════════════════════════════════════════════════════════════════════
 // 
-// Ubicación típica: C:\Windows\Microsoft.NET\Framework64\vx.xxxx\...
-// ========================================
+// ¿QUÉ HACE?
+// ----------
+// Envía texto al TTS de Nopolo con la voz por defecto.
+// 
+// CÓMO USAR:
+// ----------
+// 1. Crear comando en Streamer.bot: !tts
+// 2. El usuario escribe: !tts Hola, esto es una prueba
+// 3. Nopolo reproduce el mensaje con la voz por defecto
+//
+// CONFIGURACIÓN:
+// --------------
+// • Servidor Nopolo corriendo en: http://localhost:8000
+// • Iniciar con: ./run_nopolo_full.sh
+//
+// REFERENCIAS NECESARIAS:
+// -----------------------
+// System.dll, System.Net.Sockets.dll
+//
+// ═══════════════════════════════════════════════════════════════════════════
 
 using System;
 using System.Net.Sockets;
@@ -19,88 +33,122 @@ public class CPHInline
     {
         try
         {
-            // Obtener el mensaje del comando !tts
-            if (!CPH.TryGetArg("rawInput", out string message))
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // PASO 1: Obtener el mensaje que escribió el usuario
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            if (!CPH.TryGetArg("rawInput", out string mensaje))
             {
-                CPH.LogError("[TTS] No se encontró el mensaje");
+                CPH.LogError("❌ [TTS Simple] No hay mensaje para leer");
                 return false;
             }
 
-            // Escapar caracteres especiales para JSON
-            string escapedMessage = EscapeJson(message);
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // PASO 2: Preparar el mensaje para enviarlo
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            string mensajeSeguro = PrepararMensajeParaJSON(mensaje);
+            string json = "{\"text\":\"" + mensajeSeguro + "\"}";
 
-            // Crear JSON payload
-            string jsonBody = "{\"text\":\"" + escapedMessage + "\"}";
-
-            // Enviar request HTTP al servidor TTS
-            string response = SendHttpPost("127.0.0.1", 8000, "/api/tts", jsonBody);
-
-            // Verificar respuesta
-            if (response.Contains("200 OK") || response.Contains("\"success\":true"))
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // PASO 3: Enviar al servidor de Nopolo
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            bool exito = EnviarANopolo(json);
+            
+            if (exito)
             {
-                CPH.LogInfo("[TTS] ✓ Enviado: " + message);
+                CPH.LogInfo("✅ [TTS Simple] Mensaje enviado: " + mensaje);
                 return true;
             }
             else
             {
-                CPH.LogWarn("[TTS] Respuesta inesperada del servidor");
+                CPH.LogWarn("⚠️ [TTS Simple] No se pudo enviar el mensaje");
                 return false;
             }
         }
         catch (Exception ex)
         {
-            CPH.LogError("[TTS] Error: " + ex.Message);
+            CPH.LogError("❌ [TTS Simple] Error: " + ex.Message);
             return false;
         }
     }
 
-    // Escapa caracteres especiales para JSON (Unicode se maneja con UTF-8)
-    private string EscapeJson(string text)
+    // ═══════════════════════════════════════════════════════════════════════
+    // FUNCIONES AUXILIARES (No es necesario modificar nada aquí)
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    /// <summary>
+    /// Convierte el texto a un formato seguro para JSON
+    /// (Reemplaza comillas y caracteres especiales)
+    /// </summary>
+    private string PrepararMensajeParaJSON(string texto)
     {
-        return text
-            .Replace("\\", "\\\\")
-            .Replace("\"", "\\\"")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t")
-            .Replace("\b", "\\b")
-            .Replace("\f", "\\f");
+        return texto
+            .Replace("\\", "\\\\")  // Barra invertida
+            .Replace("\"", "\\\"")  // Comillas dobles
+            .Replace("\n", "\\n")   // Salto de línea
+            .Replace("\r", "\\r")   // Retorno de carro
+            .Replace("\t", "\\t");  // Tabulación
     }
 
-    // Envía HTTP POST request con soporte completo para UTF-8
-    private string SendHttpPost(string host, int port, string path, string jsonBody)
+    /// <summary>
+    /// Envía el mensaje al servidor de Nopolo
+    /// </summary>
+    private bool EnviarANopolo(string json)
     {
-        // Calcular Content-Length en bytes UTF-8 (maneja tildes, emojis, etc.)
-        byte[] bodyBytes = Encoding.UTF8.GetBytes(jsonBody);
-        int contentLength = bodyBytes.Length;
-        
-        string headers = 
-            "POST " + path + " HTTP/1.1\r\n" +
-            "Host: " + host + ":" + port + "\r\n" +
-            "Content-Type: application/json; charset=utf-8\r\n" +
-            "Content-Length: " + contentLength + "\r\n" +
-            "Connection: close\r\n" +
-            "\r\n";
-
-        using (TcpClient client = new TcpClient())
+        try
         {
-            client.SendTimeout = 5000;
-            client.ReceiveTimeout = 5000;
-            client.Connect(host, port);
-
-            NetworkStream stream = client.GetStream();
+            // Configuración del servidor
+            string servidor = "127.0.0.1";  // localhost
+            int puerto = 8000;
+            string ruta = "/api/tts";
             
-            // Headers en ASCII
-            byte[] headerBytes = Encoding.ASCII.GetBytes(headers);
-            stream.Write(headerBytes, 0, headerBytes.Length);
+            // Convertir texto a bytes
+            byte[] jsonBytes = Encoding.UTF8.GetBytes(json);
             
-            // Body en UTF-8
-            stream.Write(bodyBytes, 0, bodyBytes.Length);
-            stream.Flush();
+            // Crear petición HTTP
+            string encabezados = 
+                "POST " + ruta + " HTTP/1.1\r\n" +
+                "Host: " + servidor + ":" + puerto + "\r\n" +
+                "Content-Type: application/json; charset=utf-8\r\n" +
+                "Content-Length: " + jsonBytes.Length + "\r\n" +
+                "Connection: close\r\n" +
+                "\r\n";
 
-            byte[] buffer = new byte[4096];
-            int bytesRead = stream.Read(buffer, 0, buffer.Length);
-            return Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            // Conectar y enviar
+            using (TcpClient cliente = new TcpClient())
+            {
+                cliente.SendTimeout = 5000;
+                cliente.ReceiveTimeout = 5000;
+                cliente.Connect(servidor, puerto);
+
+                NetworkStream stream = cliente.GetStream();
+                
+                // Enviar encabezados
+                byte[] encabezadosBytes = Encoding.ASCII.GetBytes(encabezados);
+                stream.Write(encabezadosBytes, 0, encabezadosBytes.Length);
+                
+                // Enviar mensaje
+                stream.Write(jsonBytes, 0, jsonBytes.Length);
+                stream.Flush();
+
+                // Leer respuesta
+                byte[] buffer = new byte[4096];
+                int bytesLeidos = stream.Read(buffer, 0, buffer.Length);
+                string respuesta = Encoding.UTF8.GetString(buffer, 0, bytesLeidos);
+                
+                // Verificar si fue exitoso
+                return respuesta.Contains("200 OK") || respuesta.Contains("\"success\":true");
+            }
+        }
+        catch (SocketException)
+        {
+            CPH.LogError("❌ [TTS Simple] No se pudo conectar a Nopolo.");
+            CPH.LogError("   → ¿Está corriendo en http://localhost:8000?");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            CPH.LogError("❌ [TTS Simple] Error: " + ex.Message);
+            return false;
         }
     }
 }

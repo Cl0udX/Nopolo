@@ -6,6 +6,8 @@ Scripts C# para integrar Nopolo TTS con Streamer.bot
 
 1. **Nopolo TTS corriendo** con API habilitada:
     ```bash
+    ./run_nopolo_full.sh
+    # O manualmente:
     python main.py --with-api
     ```
 
@@ -17,10 +19,11 @@ Scripts C# para integrar Nopolo TTS con Streamer.bot
 
 ## 🚀 Scripts Disponibles
 
-### 1. TTS_Simple.cs
+### 1. TTS_Simple.cs ⭐ RECOMENDADO PARA PRINCIPIANTES
 - **Comando:** `!tts <mensaje>`
 - **Función:** Envía texto al TTS con voz por defecto
 - **Ejemplo:** `!tts Hola chat, ¿cómo están?`
+- **Nivel:** Básico
 
 ### 2. TTS_ConVoz.cs
 - **Comando:** `!tts <voz> <mensaje>`
@@ -28,16 +31,47 @@ Scripts C# para integrar Nopolo TTS con Streamer.bot
 - **Ejemplos:** 
   - `!tts goku Hola, soy Goku`
   - `!tts homero D'oh!`
+- **Nivel:** Básico
 
-### 3. TTS_ListarVoces.cs
+### 3. TTS_NopoloMultiVoz.cs 🎭 NUEVO - MODO AVANZADO
+- **Comando:** Usa la sintaxis completa de Nopolo
+- **Función:** Múltiples voces, efectos y sonidos en un solo mensaje
+- **Sintaxis:**
+  ```
+  voz: texto                  → Usar una voz
+  voz.filtro: texto          → Voz + efecto (r, p, pu, pd, m, a, l)
+  voz.fondo: texto           → Voz + música de fondo
+  (sonido)                   → Reproducir sonido
+  ```
+- **Ejemplos:**
+  ```
+  homero: Hola (aplausos) dross: Gracias
+  homero.r: Hola con eco
+  homero.fa: Hola con fondo de ambiente
+  ```
+- **Filtros disponibles:**
+  - `r` = Eco/Reverberación
+  - `p` = Llamada telefónica  
+  - `pu` = Voz aguda (chipmunk)
+  - `pd` = Voz grave (monstruo)
+  - `m` = Voz apagada
+  - `a` = Robot
+  - `l` = Saturada
+- **Nivel:** Avanzado
+
+### 4. TTS_ListarVoces.cs
 - **Comando:** `!voces`
 - **Función:** Muestra las voces disponibles en los logs
+- **Nivel:** Básico
 
-### 4. TTS_EstadoCola.cs
+### 5. TTS_EstadoCola.cs
 - **Comando:** `!cola`
 - **Función:** Muestra cuántos mensajes hay en cola
+- **Nivel:** Básico
 
 ## 📝 Instalación en Streamer.bot
+
+### Para principiantes (Recomendado):
 
 1. **Ir a Actions:**
     - Click derecho → Add
@@ -46,8 +80,22 @@ Scripts C# para integrar Nopolo TTS con Streamer.bot
 
 2. **Agregar Sub-Action:**
     - Execute Code → Execute C# Code
-    - Pegar el código del script deseado
-    - Click Compile
+    - Copiar el código de **TTS_Simple.cs**
+    - Click **Compile**
+    - Si compila sin errores, ¡listo!
+
+3. **Crear Comando:**
+    - Ir a Commands
+    - Crear comando `!tts`
+    - Vincular a la Action creada
+
+### Para usuarios avanzados:
+
+Usa **TTS_NopoloMultiVoz.cs** para acceder a todas las funcionalidades:
+- Múltiples voces en un mensaje
+- Efectos de audio en tiempo real
+- Música de fondo
+- Sonidos personalizados
 
 3. **Agregar Referencias:**
     - En Settings (dentro del código C#)
