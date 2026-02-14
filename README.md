@@ -194,34 +194,13 @@ reportero.fa: estamos en vivo desde la calle principal (sirena) testigo.m: escuc
 dross: bienvenidos al video (aplauso) narrador.fb.r: era una noche lluviosa homero.pu: doh! (risa)
 ```
 
-### Configuración de Efectos
+### Configuración de Efectos de Sonido y Sonidos de fondo
 
-**Sonidos** (`config/sounds.json`):
-```json
-{
-  "sounds": {
-    "1": {
-      "id": "1",
-      "name": "disparo",
-      "path": "sounds/disparo.wav"
-    }
-  }
-}
-```
+Para configurar ambos, es necesario editar los archivos `config/sounds.json` y `config/backgrounds.json`.
+O la mejor opción es usar la interfaz gráfica de configuración.
 
-**Fondos** (`config/backgrounds.json`):
-```json
-{
-  "backgrounds": {
-    "fa": {
-      "id": "fa",
-      "name": "calle",
-      "path": "backgrounds/calle.wav",
-      "volume": 0.3
-    }
-  }
-}
-```
+Puede usar el siguiente enlace para descargar contenido para Nopolo (Audios y Fondos):
+[Descargar contenido para Nopolo (Google Drive)](https://drive.google.com/drive/folders/1rBW0eycWrFqZbRiXQYjJFG-CNH-ej5MU?usp=sharing)
 
 ### Scripts de Prueba
 
