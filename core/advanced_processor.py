@@ -61,6 +61,223 @@ class AdvancedAudioProcessor:
         self.parser = MessageParser(default_voice="base_male")
         self.filters = AudioFilters()
     
+    def _apply_fade(self, audio: np.ndarray, sr: int, fade_duration: float = 0.15) -> np.ndarray:
+        """
+        Aplica fade in y fade out a un audio para suavizar transiciones.
+        Usa curva de coseno para transiciones mas suaves y naturales.
+        
+        Args:
+            audio: Audio a procesar
+            sr: Sample rate
+            fade_duration: Duracion del fade en segundos (default 150ms)
+            
+        Returns:
+            Audio con fades aplicados
+        """
+        if len(audio) == 0:
+            return audio
+        
+        fade_samples = int(sr * fade_duration)
+        
+        # No aplicar fade si el audio es muy corto
+        if len(audio) < fade_samples * 2:
+            fade_samples = len(audio) // 4  # Usar 25% del audio para fade
+        
+        if fade_samples <= 0:
+            return audio
+        
+        # Crear copia para no modificar el original
+        faded = audio.copy()
+        
+        # Fade in (inicio) - Curva de coseno para transicion mas suave
+        fade_in_curve = 0.5 * (1 - np.cos(np.linspace(0, np.pi, fade_samples)))
+        faded[:fade_samples] *= fade_in_curve
+        
+        # Fade out (final) - Curva de coseno para transicion mas suave
+        fade_out_curve = 0.5 * (1 + np.cos(np.linspace(0, np.pi, fade_samples)))
+        faded[-fade_samples:] *= fade_out_curve
+        
+        return faded
+    
+    def _apply_smart_fade(self, audio: np.ndarray, sr: int, apply_fade_in: bool, apply_fade_out: bool, fade_duration: float = 0.4) -> np.ndarray:
+        """
+        Aplica fade in y/o fade out selectivamente.
+        
+        Args:
+            audio: Audio a procesar
+            sr: Sample rate
+            apply_fade_in: Si aplicar fade in
+            apply_fade_out: Si aplicar fade out
+            fade_duration: Duracion del fade en segundos (default 400ms)
+            
+        Returns:
+            Audio con fades aplicados
+        """
+        if len(audio) == 0:
+            return audio
+        
+        if not apply_fade_in and not apply_fade_out:
+            return audio  # No aplicar ningun fade
+        
+        fade_samples = int(sr * fade_duration)
+        
+        # No aplicar fade si el audio es muy corto
+        if len(audio) < fade_samples * 2:
+            fade_samples = len(audio) // 4
+        
+        if fade_samples <= 0:
+            return audio
+        
+        # Crear copia para no modificar el original
+        faded = audio.copy()
+        
+        # Fade in (inicio) - Solo si apply_fade_in=True
+        if apply_fade_in:
+            fade_in_curve = 0.5 * (1 - np.cos(np.linspace(0, np.pi, fade_samples)))
+            faded[:fade_samples] *= fade_in_curve
+        
+        # Fade out (final) - Solo si apply_fade_out=True
+        if apply_fade_out:
+            fade_out_curve = 0.5 * (1 + np.cos(np.linspace(0, np.pi, fade_samples)))
+            faded[-fade_samples:] *= fade_out_curve
+        
+        return faded
+    
+    def _crossfade_chunks(self, chunks: List[np.ndarray], metadata: List[dict], sr: int, crossfade_duration: float = 0.3) -> np.ndarray:
+        """
+        Combina chunks de audio con crossfade inteligente.
+        
+        Si dos chunks consecutivos tienen el mismo fondo, aplica crossfade overlap.
+        Si tienen fondos diferentes, los concatena normalmente.
+        
+        Args:
+            chunks: Lista de chunks de audio
+            metadata: Metadata de cada chunk (fondos)
+            sr: Sample rate
+            crossfade_duration: Duracion del crossfade en segundos (default 300ms)
+            
+        Returns:
+            Audio combinado
+        """
+        if not chunks:
+            return np.array([], dtype=np.float32)
+        
+        if len(chunks) == 1:
+            return chunks[0]
+        
+        crossfade_samples = int(sr * crossfade_duration)
+        result = chunks[0]
+        
+        for i in range(1, len(chunks)):
+            prev_backgrounds = metadata[i-1]['backgrounds']
+            curr_backgrounds = metadata[i]['backgrounds']
+            
+            # Si ambos tienen fondos Y son iguales → CROSSFADE
+            if prev_backgrounds and curr_backgrounds and prev_backgrounds == curr_backgrounds:
+                print(f"  Crossfade entre chunk {i} y {i+1} (fondos iguales: {prev_backgrounds})")
+                
+                # Asegurar que hay suficiente audio para crossfade
+                overlap = min(crossfade_samples, len(result), len(chunks[i]))
+                
+                if overlap > 0:
+                    # Extraer región de overlap del resultado actual
+                    overlap_start = len(result) - overlap
+                    overlap_region_prev = result[overlap_start:].copy()
+                    overlap_region_curr = chunks[i][:overlap].copy()
+                    
+                    # Crear curvas de crossfade (coseno)
+                    fade_out_curve = 0.5 * (1 + np.cos(np.linspace(0, np.pi, overlap)))
+                    fade_in_curve = 0.5 * (1 - np.cos(np.linspace(0, np.pi, overlap)))
+                    
+                    # Aplicar crossfade
+                    crossfaded = overlap_region_prev * fade_out_curve + overlap_region_curr * fade_in_curve
+                    
+                    # Reemplazar región de overlap y agregar el resto
+                    result = np.concatenate([
+                        result[:overlap_start],
+                        crossfaded,
+                        chunks[i][overlap:]
+                    ])
+                else:
+                    # Si no hay suficiente para overlap, concatenar normalmente
+                    result = np.concatenate([result, chunks[i]])
+            else:
+                # Fondos diferentes o sin fondos → concatenar normalmente
+                print(f"  Concatenacion normal entre chunk {i} y {i+1}")
+                result = np.concatenate([result, chunks[i]])
+        
+        return result
+    
+    def _get_background_filters(self, segment: MessageSegment) -> List[str]:
+        """
+        Extrae los filtros de fondo de un segmento.
+        
+        Args:
+            segment: Segmento a analizar
+            
+        Returns:
+            Lista de IDs de fondos (ej: ['fc', 'fd'])
+        """
+        if not segment.filters:
+            return []
+        
+        backgrounds = []
+        for f in segment.filters:
+            if f.value.startswith('f') and len(f.value) == 2:  # fa, fb, fc, fd, fe
+                backgrounds.append(f.value)
+        
+        return backgrounds
+    
+    def _should_apply_fade(self, segments: List[MessageSegment], current_idx: int, fade_type: str) -> bool:
+        """
+        Determina si se debe aplicar fade in o fade out a un segmento.
+        
+        Logica:
+        - Si segmentos consecutivos tienen el MISMO fondo NO VACIO, NO aplicar fade entre ellos
+        - Si ambos NO tienen fondo, SI aplicar fade (para separar voces normales)
+        - Si tienen fondos DIFERENTES, SI aplicar fade
+        
+        Args:
+            segments: Lista completa de segmentos
+            current_idx: Indice del segmento actual
+            fade_type: 'in' o 'out'
+            
+        Returns:
+            True si debe aplicar fade, False si no
+        """
+        if current_idx < 0 or current_idx >= len(segments):
+            return True
+        
+        current_backgrounds = set(self._get_background_filters(segments[current_idx]))
+        
+        if fade_type == 'in':
+            # Fade in: comparar con segmento ANTERIOR
+            if current_idx == 0:
+                return True  # Siempre fade in al inicio
+            
+            prev_backgrounds = set(self._get_background_filters(segments[current_idx - 1]))
+            
+            # Si AMBOS tienen fondos Y son iguales → NO aplicar fade (continuidad)
+            if current_backgrounds and prev_backgrounds and current_backgrounds == prev_backgrounds:
+                return False
+            
+            # En cualquier otro caso → SI aplicar fade
+            return True
+            
+        else:  # fade_type == 'out'
+            # Fade out: comparar con segmento SIGUIENTE
+            if current_idx == len(segments) - 1:
+                return True  # Siempre fade out al final
+            
+            next_backgrounds = set(self._get_background_filters(segments[current_idx + 1]))
+            
+            # Si AMBOS tienen fondos Y son iguales → NO aplicar fade (continuidad)
+            if current_backgrounds and next_backgrounds and current_backgrounds == next_backgrounds:
+                return False
+            
+            # En cualquier otro caso → SI aplicar fade
+            return True
+    
     def process_message(self, message: str, target_sr: int = 16000) -> Tuple[np.ndarray, int]:
         """
         Procesa un mensaje complejo y genera audio.
@@ -82,15 +299,9 @@ class AdvancedAudioProcessor:
         segments = self.parser.parse(message)
         print(f"{len(segments)} segmentos detectados")
         
-        # Detectar filtros de fondo globales
-        background_filters = set()
-        for segment in segments:
-            for f in segment.filters:
-                if f.value.startswith('f'):  # fa, fb, fc, fd, fe
-                    background_filters.add(f)
-        
-        # 2. Procesar cada segmento
+        # 2. Procesar cada segmento (fondos son LOCALES a cada segmento)
         audio_chunks = []
+        segment_metadata = []  # Guardar metadata de cada segmento para crossfade
         
         for i, segment in enumerate(segments):
             print(f"\n{'='*50}")
@@ -99,15 +310,45 @@ class AdvancedAudioProcessor:
             
             try:
                 if segment.type == SegmentType.VOICE:
-                    chunk = self._process_voice_segment(segment, target_sr, apply_background=False)
+                    chunk = self._process_voice_segment(segment, target_sr, apply_background=True)
                 elif segment.type == SegmentType.SOUND:
-                    chunk = self._process_sound_segment(segment, target_sr, apply_background=False)
+                    chunk = self._process_sound_segment(segment, target_sr, apply_background=True)
                 else:
                     print(f"Tipo de segmento desconocido: {segment.type}")
                     continue
                 
                 if chunk is not None:
+                    # Aplicar fades INTELIGENTES: solo si fondos cambian
+                    apply_fade_in = self._should_apply_fade(segments, i, 'in')
+                    apply_fade_out = self._should_apply_fade(segments, i, 'out')
+                    
+                    # Log de fades aplicados
+                    fade_info = []
+                    if apply_fade_in:
+                        fade_info.append("fade-in")
+                    if apply_fade_out:
+                        fade_info.append("fade-out")
+                    
+                    if fade_info:
+                        print(f"  Aplicando: {', '.join(fade_info)}")
+                    else:
+                        print(f"  Sin fades (continuidad de fondo)")
+                    
+                    chunk = self._apply_smart_fade(
+                        chunk, 
+                        target_sr, 
+                        apply_fade_in=apply_fade_in,
+                        apply_fade_out=apply_fade_out,
+                        fade_duration=0.4  # 400ms para fades MUY suaves
+                    )
+                    
                     audio_chunks.append(chunk)
+                    # Guardar metadata del segmento para crossfade posterior
+                    segment_metadata.append({
+                        'backgrounds': set(self._get_background_filters(segment)),
+                        'segment_idx': i
+                    })
+                    
                     # Liberar referencia del chunk original para ayudar al GC
                     del chunk
                     
@@ -138,32 +379,18 @@ class AdvancedAudioProcessor:
                 import gc
                 gc.collect()
         
-        # 3. Concatenar todos los chunks
+        # 3. Concatenar chunks con crossfade inteligente
         if not audio_chunks:
             print("No se generó audio")
             # Retornar silencio de 1 segundo
             return (np.zeros(target_sr, dtype=np.float32), target_sr)
         
-        print(f"\nConcatenando {len(audio_chunks)} chunks de audio...")
-        final_audio = np.concatenate(audio_chunks)
+        print(f"\nCombinando {len(audio_chunks)} chunks de audio con crossfade inteligente...")
         
-        # 4. Aplicar fondos globales al audio completo
-        if background_filters:
-            print(f"Aplicando {len(background_filters)} fondo(s) al audio completo...")
-            for bg_filter in background_filters:
-                bg_id = bg_filter.value
-                print(f"   Fondo global: {bg_id}")
-                
-                bg_data = self.background_manager.load_background_audio(bg_id)
-                if bg_data:
-                    bg_audio, bg_sr, bg_volume = bg_data
-                    final_audio = self.filters.apply_background(
-                        final_audio, target_sr, bg_audio, bg_sr, bg_volume
-                    )
-                else:
-                    print(f"   Fondo '{bg_id}' no encontrado")
+        # Aplicar crossfade entre chunks con fondos iguales
+        final_audio = self._crossfade_chunks(audio_chunks, segment_metadata, target_sr)
         
-        # 5. Normalizar audio final
+        # 4. Normalizar audio final
         max_val = np.max(np.abs(final_audio))
         if max_val > 0:
             final_audio = final_audio / max_val * 0.9
@@ -309,8 +536,6 @@ class AdvancedAudioProcessor:
                             )
                         else:
                             print(f"       Fondo '{bg_id}' no encontrado")
-                elif background_filters and not apply_background:
-                    print(f"  3. Fondos detectados (se aplicarán globalmente al final)")
             
             # 4. Resample si es necesario
             if final_sr != target_sr:

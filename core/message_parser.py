@@ -80,7 +80,8 @@ class MessageParser:
     """
     
     # Patrón para detectar voces con filtros: "nombre.filtro:" o "id.filtro:"
-    VOICE_PATTERN = re.compile(r'(\w+)(?:\.(\w+))?:\s*')
+    # Soporta múltiples filtros: "nombre.filtro1.filtro2:"
+    VOICE_PATTERN = re.compile(r'([\w.]+):\s*')
     
     # Patrón para detectar sonidos: "(nombre)" o "(id)"
     SOUND_PATTERN = re.compile(r'\(([^)]+)\)')
@@ -171,39 +172,36 @@ class MessageParser:
             
             # Procesar el match
             if next_type == "voice":
-                # Cambiar voz actual
-                voice_id = voice_match.group(1)
-                filter_id = voice_match.group(2)
+                # Cambiar voz actual y extraer múltiples filtros
+                voice_full = voice_match.group(1)  # Ej: "homero.p.fc"
+                parts = voice_full.split('.')       # ["homero", "p", "fc"]
                 
-                current_voice = voice_id
+                current_voice = parts[0]  # Primer elemento es la voz
                 current_filters = []
                 
-                # Aplicar filtro si existe
-                if filter_id:
+                # Extraer todos los filtros (resto de elementos)
+                for filter_id in parts[1:]:
                     try:
-                        current_filters = [AudioFilter(filter_id)]
+                        current_filters.append(AudioFilter(filter_id))
                     except ValueError:
                         print(f"Filtro desconocido: {filter_id}")
                 
                 pos = next_match.end()
                 
             elif next_type == "sound":
-                # Agregar sonido
-                sound_full = sound_match.group(1)
+                # Agregar sonido con múltiples filtros
+                sound_full = sound_match.group(1)  # Ej: "330.fc.p"
+                parts = sound_full.split('.')       # ["330", "fc", "p"]
                 
-                # Separar ID de filtros (ej: "71.fd" → id="71", filter="fd")
+                sound_id = parts[0]  # Primer elemento es el ID del sonido
                 sound_filters = []
-                if '.' in sound_full:
-                    parts = sound_full.split('.', 1)
-                    sound_id = parts[0]
-                    filter_id = parts[1]
+                
+                # Extraer todos los filtros (resto de elementos)
+                for filter_id in parts[1:]:
                     try:
-                        sound_filters = [AudioFilter(filter_id)]
+                        sound_filters.append(AudioFilter(filter_id))
                     except ValueError:
                         print(f"Filtro desconocido en sonido: {filter_id}")
-                        sound_id = sound_full  # Usar todo como ID
-                else:
-                    sound_id = sound_full
                 
                 segments.append(MessageSegment(
                     type=SegmentType.SOUND,
