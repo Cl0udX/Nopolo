@@ -120,15 +120,49 @@ Configuración en .env para personalizar rutas y puertos.
         # Configurar icono de taskbar ANTES de crear QApplication
         setup_windows_taskbar_icon()
         
-        from gui.main_window import MainWindow
+        # Importar solo el splash screen primero (es ligero)
+        from gui.splash_screen import SplashScreen
+        from PySide6.QtCore import QTimer
+        
         app = QApplication(sys.argv)
         setup_app_icon(app)
-        window = MainWindow(
-            enable_api=True,
-            api_host=args.api_host,
-            api_port=args.api_port
-        )
-        window.show()
+        
+        # Mostrar splash screen INMEDIATAMENTE
+        splash = SplashScreen()
+        splash.show()
+        app.processEvents()  # Asegurar que el splash se dibuje
+        
+        # Variables para almacenar la ventana
+        window = None
+        
+        def load_main_window():
+            """Carga la ventana principal después de que el splash se haya renderizado"""
+            nonlocal window
+            
+            # AHORA importar MainWindow (pesado - tarda varios segundos)
+            # Mientras tanto, el timer del splash sigue actualizando la animación
+            from gui.main_window import MainWindow
+            
+            # Procesar eventos durante la creación de la ventana
+            app.processEvents()
+            
+            # Crear ventana principal mientras el splash está visible
+            window = MainWindow(
+                enable_api=True,
+                api_host=args.api_host,
+                api_port=args.api_port
+            )
+            
+            # Cuando el splash termine, mostrar la ventana principal
+            def show_main_window():
+                window.show()
+            
+            splash.loading_finished.connect(show_main_window)
+        
+        # Dar un pequeño delay para que el splash se renderice completamente
+        # antes de empezar la carga pesada
+        QTimer.singleShot(100, load_main_window)
+        
         sys.exit(app.exec())
     
     else:  # gui_only
@@ -139,11 +173,45 @@ Configuración en .env para personalizar rutas y puertos.
         # Configurar icono de taskbar ANTES de crear QApplication
         setup_windows_taskbar_icon()
         
-        from gui.main_window import MainWindow
+        # Importar solo el splash screen primero (es ligero)
+        from gui.splash_screen import SplashScreen
+        from PySide6.QtCore import QTimer
+        
         app = QApplication(sys.argv)
         setup_app_icon(app)
-        window = MainWindow()
-        window.show()
+        
+        # Mostrar splash screen INMEDIATAMENTE
+        splash = SplashScreen()
+        splash.show()
+        app.processEvents()  # Asegurar que el splash se dibuje
+        
+        # Variables para almacenar la ventana
+        window = None
+        
+        def load_main_window():
+            """Carga la ventana principal después de que el splash se haya renderizado"""
+            nonlocal window
+            
+            # AHORA importar MainWindow (pesado - tarda varios segundos)
+            # Mientras tanto, el timer del splash sigue actualizando la animación
+            from gui.main_window import MainWindow
+            
+            # Procesar eventos durante la creación de la ventana
+            app.processEvents()
+            
+            # Crear ventana principal mientras el splash está visible
+            window = MainWindow()
+            
+            # Cuando el splash termine, mostrar la ventana principal
+            def show_main_window():
+                window.show()
+            
+            splash.loading_finished.connect(show_main_window)
+        
+        # Dar un pequeño delay para que el splash se renderice completamente
+        # antes de empezar la carga pesada
+        QTimer.singleShot(100, load_main_window)
+        
         sys.exit(app.exec())
 
 if __name__ == "__main__":

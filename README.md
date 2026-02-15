@@ -159,9 +159,12 @@ StreamTTS/
 - [x] Filtros de audio (reverb, phone, pitch, robot, etc.)
 - [x] Filtros de fondo (ambiente/contexto durante la voz)
 - [x] Endpoint API `/synthesize/advanced` para mensajes complejos
+- [ ] Modulo de entrenamiento de modelos RVC personalizados
+- [ ] Optimización de latencia
+- [ ] Traduccion a otros idiomas (inglés, portugués, etc.)
 - [ ] Integración directa con Streamer.bot
 - [ ] Configuración avanzada desde la interfaz
-- [ ] Optimización de latencia
+- [ ] Mejoramiento en la entonación y naturalidad de las voces TTS
 
 ---
 
@@ -201,7 +204,7 @@ nombre.filtro1.filtro2: texto con múltiples filtros
 | a   | Robot       | Voz robótica/android           | `robot.a: beep boop`   |
 | l   | Distortion  | Voz saturada/distorsionada     | `metal.l: gritando`    |
 
-### Filtros de Fondo
+### Ejemplos de filtros de Fondo
 
 Mezclan un audio de ambiente/contexto **durante** toda la frase:
 
