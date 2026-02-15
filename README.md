@@ -277,176 +277,78 @@ Si quieres contribuir, probar o proponer ideas, eres bienvenido.
 
 ---
 
-## Requisitos del Sistema
+## 📦 Instalación Rápida
 
-- **Python 3.10.11** (recomendado)
-- **Chocolatey** (para instalar dependencias del sistema WIN)
-- **Homebrew** (para instalar dependencias del sistema macOS)
-- Conexión a internet (edge-tts usa servicios en línea de Microsoft)
-
----
-
-## Instalación
-
-### 1. Instalar Chocolatey o Homebrew
-
-Ejecuta PowerShell como **administrador** y sigue las instrucciones en:
-
-https://chocolatey.org/install
-
-O si estás en macOS, instala Homebrew siguiendo las instrucciones en:
-
-https://brew.sh/
-
-
-### 2. Instalar FFmpeg
-
-En la misma consola de PowerShell (como administrador):
-
-```powershell
-# Windows
-choco install ffmpeg
-# O en macOS:
-brew install ffmpeg
-```
-
-### 3. Crear Entorno Virtual
-
-En el directorio del proyecto:
+### Instalador Interactivo (Recomendado)
 
 ```bash
+# 1. Clonar repositorio
+git clone https://github.com/tu-usuario/nopolo.git
+cd nopolo
+
+# 2. Crear entorno virtual
 python3.10 -m venv .venv
+
+# Activar entorno (Windows)
 .venv\Scripts\activate
+
+# Activar entorno (Linux/macOS)
+source .venv/bin/activate
+
+# 3. Ejecutar instalador
+python install.py
 ```
 
-### 4. Instalar Dependencias de Python
+El instalador detectará automáticamente tu sistema operativo y te guiará en la configuración apropiada (CPU, CUDA 12.4, CUDA 12.8, macOS).
 
-Con el entorno virtual activado:
+### Instalación Manual
 
-```bash
-pip install PySide6 sounddevice numpy scipy pydub edge-tts soundfile librosa
-pip install  praat-parselmouth pyworld torchcrepe faiss-cpu python-dotenv av
--- Nvidia
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 (para GPU NVIDIA con CUDA 12.4)
-pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 (para GPU NVIDIA con CUDA 12.8 esto es experimental y puede ser inestable)
--- Mac o sin GPU
-pip install torch torchvision torchaudio
+Para instrucciones detalladas de instalación manual según tu plataforma y hardware, consulta **[INSTALL.md](INSTALL.md)**.
 
-pip install git+https://github.com/Tps-F/fairseq.git@main (Como administrador)
-
-pip install fastapi uvicorn pydantic python-dotenv aiohttp
-
-pip install tensorboardX
-
-pip install google-cloud-texttospeech
-```
+**Configuraciones soportadas:**
+- Windows/Linux con CPU
+- Windows/Linux con GPU NVIDIA RTX 30xx/40xx (CUDA 12.4)
+- Windows/Linux con GPU NVIDIA RTX 50xx (CUDA 12.8 - experimental)
+- macOS Apple Silicon (M1/M2/M3)
+- macOS Intel
 
 ---
 
-## Configuración Actual
+## 🚀 Inicio Rápido
 
-El proyecto usa **edge-tts** (Microsoft Azure TTS):
-- ✅ Sin necesidad de GPU
-- ✅ Calidad de voz excelente
-- ✅ Rápido y eficiente
-- ✅ Soporte para múltiples voces en español
-- ❌ Requiere conexión a internet
-
-Voz por defecto: `es-MX-JorgeNeural` (español mexicano, masculina)
-
-Otras voces disponibles:
-- `es-ES-AlvaroNeural` - Español España (masculina)
-- `es-AR-TomasNeural` - Español Argentina (masculina)
-- `es-MX-DaliaNeural` - Español México (femenina)
-
----
-
-## Alternativa: Coqui TTS (Avanzado)
-
-Si prefieres usar **Coqui TTS** con clonación de voz (offline, más lento):
-
-### Requisitos Adicionales:
-
-1. **eSpeak-NG:**
-   ```powershell
-   choco install espeak-ng
-   o
-   brew install espeak-ng
-   ```
-
-2. **Microsoft Visual C++ Build Tools:**
-   - Descarga de: https://visualstudio.microsoft.com/visual-cpp-build-tools/
-   - Selecciona "Desktop development with C++"
-   - Instala (~6-7 GB)
-
-3. **Dependencias adicionales:**
-   ```bash
-   pip install TTS
-   
-   # Solo CPU:
-   pip install torch==2.1.0 torchaudio==2.1.0
-   
-   # GPU NVIDIA (CUDA 12.1):
-   pip install torch==2.1.0+cu121 torchaudio==2.1.0+cu121 --index-url https://download.pytorch.org/whl/cu121
-   
-   # ⚠️ GPU Blackwell (RTX 50xx series): Actualmente incompatible con Coqui TTS
-   # Requiere Python 3.12+ pero Coqui TTS solo soporta ≤3.11
-   ```
-
-4. **Nota sobre eSpeak-NG:**
-   Si la consola no encuentra `espeak-ng`, agrega manualmente a PATH:
-   - Ruta típica: `C:\Program Files\eSpeak NG`
-   - Reinicia la consola/sistema después de agregar al PATH
-
-### Modelos Recomendados:
-- **Pesado (mejor calidad):** `tts_models/multilingual/multi-dataset/xtts_v2`
-- **Ligero (más rápido):** `tts_models/es/mai/tacotron2-DDC`
-
----
-
-## 🚀 Ejecución
-
-### Método 1: Scripts de Lanzamiento (Recomendado para Mac)
+### Windows / Linux
 
 ```bash
-# Solo interfaz gráfica (GUI)
-./run_nopolo_gui.sh
+# Activar entorno virtual (si no está activado)
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # Linux
 
-# Solo servidor API REST (sin GUI)
-./run_nopolo_api.sh
+# Ejecutar con interfaz + API (recomendado)
+python main.py --with-api
 
-# GUI + API Server simultáneamente
-./run_nopolo_full.sh
+# Solo interfaz gráfica
+python main.py
+
+# Solo servidor API
+python main.py --no-gui
 ```
 
-> **Importante:** Los scripts `.sh` establecen variables de entorno necesarias para Mac. En Windows/Linux puedes usarlos o ejecutar directamente con Python.
-
-### Método 2: Ejecución Directa con Python
+### macOS
 
 ```bash
-# Activar entorno virtual primero
-source .venv/bin/activate  # macOS/Linux
-.venv\Scripts\activate     # Windows
-
-# Modos de ejecución:
-python main.py              # Solo GUI
-python main.py --no-gui     # Solo API Server
-python main.py --with-api   # GUI + API Server
+# Usar scripts que configuran variables de entorno necesarias
+./run_nopolo_full.sh    # Interfaz + API (recomendado)
+./run_nopolo_gui.sh     # Solo interfaz
+./run_nopolo_api.sh     # Solo API
 ```
 
-### Acceso a la API REST
+**Importante para macOS:** Los scripts `.sh` establecen `PYTORCH_ENABLE_MPS_FALLBACK=1` que es necesario para Apple Silicon.
+
+### Acceso a la API
 
 Cuando ejecutas con API habilitada:
 - **Documentación interactiva:** http://localhost:8000/docs
-- **API alternativa:** http://localhost:8000/redoc
-- **Endpoint ejemplo:** `POST http://localhost:8000/synthesize`
+- **Documentación alternativa:** http://localhost:8000/redoc
+- **Health check:** http://localhost:8000/health
 
 ---
-
-
-
-## Ejecución
-
-```bash
-python main.py
-```

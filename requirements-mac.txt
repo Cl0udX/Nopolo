@@ -1,0 +1,13 @@
+# Extensión para macOS (Apple Silicon M1/M2/M3)
+# Instalar primero requirements-base.txt
+
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Instalación:
+# pip install -r requirements-base.txt
+# pip install torch torchvision torchaudio
+
+# IMPORTANTE: Usar los scripts run_nopolo_*.sh para ejecución
+# Estos establecen PYTORCH_ENABLE_MPS_FALLBACK=1 necesario para Apple Silicon

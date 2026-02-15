@@ -1,0 +1,13 @@
+# Instalación de Fairseq (requerido por RVC)
+# ⚠️ IMPORTANTE: Ejecutar COMO ADMINISTRADOR en Windows
+
+# Windows (PowerShell como Administrador):
+# pip install git+https://github.com/Tps-F/fairseq.git@main
+
+# Linux/macOS:
+# sudo pip install git+https://github.com/Tps-F/fairseq.git@main
+
+# Si falla, intenta:
+# git clone https://github.com/Tps-F/fairseq.git
+# cd fairseq
+# pip install -e .

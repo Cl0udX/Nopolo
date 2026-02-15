@@ -1,0 +1,9 @@
+# Extensión para NVIDIA GPU con CUDA 12.8 (RTX 50xx - Blackwell)
+# ⚠️ EXPERIMENTAL - Requiere PyTorch nightly build
+# Instalar primero requirements-base.txt
+
+# Instalación:
+# pip install -r requirements-base.txt
+# pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+
+# NOTA: Si experimentas problemas, usa CUDA 12.4 en su lugar

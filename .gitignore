@@ -47,6 +47,26 @@ config/sounds.json
 .DS_Store
 Thumbs.db
 
+# PyInstaller / Build
+build/
+dist/
+*.spec~
+*.manifest
+*.exe.manifest
+version.txt
+
+# Outputs y logs
+outputs/
+logs/
+test_backgrounds/
+*.log
+
+# Test files
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+
 config/backgrounds.json
 
 config/sounds.json

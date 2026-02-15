@@ -1,0 +1,10 @@
+# Extensión para CPU (sin GPU NVIDIA)
+# Instalar primero requirements-base.txt
+
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Instalación:
+# pip install -r requirements-base.txt
+# pip install torch torchvision torchaudio

@@ -1,0 +1,10 @@
+# Extensión para NVIDIA GPU con CUDA 12.4 (RTX 30xx, 40xx)
+# Instalar primero requirements-base.txt
+
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Instalación:
+# pip install -r requirements-base.txt
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
