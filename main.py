@@ -54,42 +54,24 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Modos de ejecución:
-  1. Solo GUI:           python main.py
-  2. Solo API Server:    python main.py --no-gui
-  3. GUI + API Server:   python main.py --with-api
+  1. GUI + API Server (Predeterminado): python main.py
+  2. Solo GUI:                          python main.py --only-gui
+  3. Solo API Server:                   python main.py --no-gui
   
 Configuración en .env para personalizar rutas y puertos.
         """
     )
     
-    )
+    # Nuevos argumentos con lógica invertida
     parser.add_argument(
-        "--with-api",
+        "--only-gui",
         action="store_true",
-        help="GUI + API Server simultáneamente"
-    )
-    parser.add_argument(
-    parser = argparse.ArgumentParser(
-        description="Nopolo TTS - Text to Speech con RVC",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-            "--host", args.api_host,
-            "--port", str(args.api_port)
-        ]
-        run_api_main()
-    
-    elif run_mode == "gui_with_api":
-        print("Modo: GUI + API Server")
+        help="Inicia solo la interfaz gráfica sin el servidor API"
     )
     parser.add_argument(
         "--no-gui",
         action="store_true",
-        help="Solo API Server sin interfaz gráfica"
-    )
-    parser.add_argument(
-        "--only-gui",
-        action="store_true",
-        help="Solo GUI sin API Server"
+        help="Inicia solo el servidor API sin interfaz gráfica"
     )
     parser.add_argument(
         "--api-port",
@@ -102,14 +84,37 @@ Configuración en .env para personalizar rutas y puertos.
         default=os.getenv("API_HOST", "0.0.0.0"),
         help=f"Host del servidor API (default desde .env: {os.getenv('API_HOST', '0.0.0.0')})"
     )
+    
     args = parser.parse_args()
-    # Determinar modo de ejecución
+    
+    # DETERMINAR MODO DE EJECUCIÓN (Lógica actualizada)
     if args.no_gui:
         run_mode = "api_only"
     elif args.only_gui:
         run_mode = "gui_only"
     else:
+        # Por defecto, o si se fuerza por .env, arranca ambos
         run_mode = "gui_with_api"
+    
+    # Ejecutar según modo
+    print("=" * 70)
+    print("Nopolo TTS - Text to Speech con transformadores de voz RVC")
+    print("=" * 70)
+    
+    if run_mode == "api_only":
+        print("Modo: API Server (sin GUI)")
+        print(f"Host: {args.api_host}:{args.api_port}")
+        print("=" * 70)
+        from run_api import main as run_api_main
+        sys.argv = [
+            "run_api.py",
+            "--host", args.api_host,
+            "--port", str(args.api_port)
+        ]
+        run_api_main()
+    
+    elif run_mode == "gui_with_api":
+        print("Modo: GUI + API Server")
         print(f"API Server: http://{args.api_host}:{args.api_port}")
         print(f"Documentación: http://localhost:{args.api_port}/docs")
         print("=" * 70)
