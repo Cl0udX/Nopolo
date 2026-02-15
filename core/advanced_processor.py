@@ -108,12 +108,35 @@ class AdvancedAudioProcessor:
                 
                 if chunk is not None:
                     audio_chunks.append(chunk)
+                    # Liberar referencia del chunk original para ayudar al GC
+                    del chunk
                     
+                # Limpieza de memoria AGRESIVA después de cada segmento
+                # Esto previene acumulación que causa segfaults
+                import gc
+                gc.collect()
+                    
+            except MemoryError as e:
+                print(f"⚠️ Error de memoria en segmento {i+1}: {e}")
+                print(f"Audio demasiado largo o complejo - saltando segmento")
+                # Liberar memoria y continuar
+                import gc
+                gc.collect()
+                continue
+            except RuntimeError as e:
+                # RuntimeError puede indicar problemas de CUDA/GPU
+                print(f"⚠️ Error de runtime en segmento {i+1}: {e}")
+                print(f"Posible problema de GPU - saltando segmento")
+                import gc
+                gc.collect()
+                continue
             except Exception as e:
-                print(f"Error procesando segmento {i+1}: {e}")
+                print(f"⚠️ Error procesando segmento {i+1}: {e}")
                 import traceback
                 traceback.print_exc()
                 # Continuar con siguiente segmento
+                import gc
+                gc.collect()
         
         # 3. Concatenar todos los chunks
         if not audio_chunks:
@@ -145,6 +168,11 @@ class AdvancedAudioProcessor:
         if max_val > 0:
             final_audio = final_audio / max_val * 0.9
         
+        # Validar que el audio final sea válido (sin NaN o infinitos)
+        if not np.isfinite(final_audio).all():
+            print("Advertencia: Audio final contiene valores inválidos, limpiando...")
+            final_audio = np.nan_to_num(final_audio, nan=0.0, posinf=0.9, neginf=-0.9)
+        
         print(f"Audio final generado: {len(final_audio)/target_sr:.2f}s")
         
         return (final_audio, target_sr)
@@ -169,10 +197,10 @@ class AdvancedAudioProcessor:
         if filters:
             print(f"Filtros: {[f.value for f in filters]}")
         
-        # Obtener configuración de voz
-        voice_config = self.voice_manager.get_profile(voice_id)
+        # Obtener configuración de voz (buscar por ID o nombre)
+        voice_config = self.voice_manager.get_profile_by_name_or_id(voice_id)
         if not voice_config:
-            print(f"Voz no encontrada: {voice_id}, usando default")
+            print(f"Voz no encontrada: '{voice_id}', usando default")
             voice_config = self.voice_manager.get_profile("base_male")
         
         # Verificar si la voz está habilitada
@@ -199,26 +227,40 @@ class AdvancedAudioProcessor:
             if voice_config.rvc_config and voice_config.rvc_config.enabled:
                 print("  2. Aplicando RVC...")
                 
-                # Guardar TTS temporalmente para RVC
-                rvc_input_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-                rvc_input_file.close()
-                sf.write(rvc_input_file.name, tts_audio, tts_sr)
-                
-                # Cargar modelo RVC si es necesario
-                self.rvc_engine.load_model(voice_config.rvc_config)
-                
-                # Convertir
-                rvc_audio, rvc_sr = self.rvc_engine.convert(rvc_input_file.name)
-                
-                # Limpiar (puede que RVC ya lo haya eliminado)
                 try:
-                    os.unlink(rvc_input_file.name)
-                except FileNotFoundError:
-                    pass  # Ya fue eliminado
-                
-                # Usar audio RVC
-                final_audio = rvc_audio
-                final_sr = rvc_sr
+                    # Guardar TTS temporalmente para RVC
+                    rvc_input_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                    rvc_input_file.close()
+                    sf.write(rvc_input_file.name, tts_audio, tts_sr)
+                    
+                    # Cargar modelo RVC si es necesario
+                    self.rvc_engine.load_model(voice_config.rvc_config)
+                    
+                    # Convertir con protección contra segfaults
+                    rvc_audio, rvc_sr = self.rvc_engine.convert(rvc_input_file.name)
+                    
+                    # Limpiar (puede que RVC ya lo haya eliminado)
+                    try:
+                        os.unlink(rvc_input_file.name)
+                    except FileNotFoundError:
+                        pass  # Ya fue eliminado
+                    
+                    # Usar audio RVC
+                    final_audio = rvc_audio
+                    final_sr = rvc_sr
+                    
+                except Exception as rvc_error:
+                    # Si RVC falla, usar TTS sin conversión
+                    print(f"⚠️ Error en RVC (usando TTS sin conversión): {rvc_error}")
+                    final_audio = tts_audio
+                    final_sr = tts_sr
+                    
+                    # Limpiar archivo temporal si quedó
+                    try:
+                        if 'rvc_input_file' in locals():
+                            os.unlink(rvc_input_file.name)
+                    except:
+                        pass
             else:
                 print("  2. RVC deshabilitado, usando TTS directo")
                 final_audio = tts_audio

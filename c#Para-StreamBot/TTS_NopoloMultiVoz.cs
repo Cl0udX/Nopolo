@@ -165,7 +165,7 @@ public class CPHInline
     }
     
     /// <summary>
-    /// Escapa caracteres especiales para JSON
+    /// Escapa caracteres especiales para JSON (soporta tildes, emojis, etc.)
     /// </summary>
     private string EscaparJSON(string texto)
     {
@@ -174,7 +174,9 @@ public class CPHInline
             .Replace("\"", "\\\"")  // Comillas
             .Replace("\n", "\\n")   // Nueva línea
             .Replace("\r", "\\r")   // Retorno de carro
-            .Replace("\t", "\\t");  // Tabulación
+            .Replace("\t", "\\t")   // Tabulación
+            .Replace("\b", "\\b")   // Retroceso
+            .Replace("\f", "\\f");  // Form feed
     }
     
     /// <summary>

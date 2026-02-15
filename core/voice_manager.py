@@ -64,12 +64,20 @@ class VoiceManager:
     def add_profile(self, profile: VoiceProfile) -> bool:
         """Agrega un nuevo perfil de voz"""
         try:
+            print(f"   Validando perfil {profile.profile_id}...")
             profile.validate()
+            
+            print(f"   Agregando a self.profiles...")
             self.profiles[profile.profile_id] = profile
+            
+            print(f"   Guardando a archivo JSON...")
             self.save_to_file()
+            
             return True
         except Exception as e:
-            print(f"Error agregando perfil {profile.profile_id}: {e}")
+            print(f"❌ Error agregando perfil {profile.profile_id}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def remove_profile(self, profile_id: str) -> bool:
@@ -85,6 +93,35 @@ class VoiceManager:
     def get_profile(self, profile_id: str) -> Optional[VoiceProfile]:
         """Obtiene un perfil por ID"""
         return self.profiles.get(profile_id)
+    
+    def get_profile_by_name_or_id(self, identifier: str) -> Optional[VoiceProfile]:
+        """
+        Obtiene un perfil por ID o por nombre (display_name).
+        La búsqueda es case-insensitive para el nombre.
+        
+        Args:
+            identifier: ID del perfil o display_name
+            
+        Returns:
+            VoiceProfile si se encuentra, None si no existe
+            
+        Ejemplo:
+            get_profile_by_name_or_id("goku")  # Busca por ID
+            get_profile_by_name_or_id("Goku")  # Busca por nombre (display_name)
+        """
+        # Primero intentar por ID exacto (más rápido)
+        profile = self.profiles.get(identifier)
+        if profile:
+            return profile
+        
+        # Si no encuentra, buscar por display_name (case-insensitive)
+        identifier_lower = identifier.lower()
+        for profile in self.profiles.values():
+            if profile.display_name.lower() == identifier_lower:
+                return profile
+        
+        # No se encontró
+        return None
     
     def get_default_profile(self) -> Optional[VoiceProfile]:
         """Obtiene el perfil por defecto"""
@@ -111,24 +148,49 @@ class VoiceManager:
         """Lista IDs de perfiles"""
         return [p.profile_id for p in self.list_profiles(enabled_only)]
     
+    def _get_next_available_id(self) -> str:
+        """Encuentra el siguiente ID numérico consecutivo disponible (1, 2, 3...)."""
+        numeric_ids = []
+        for pid in self.profiles.keys():
+            try:
+                numeric_ids.append(int(pid))
+            except ValueError:
+                # No es un ID numérico, ignorar
+                pass
+        
+        # Buscar el primer hueco en la secuencia
+        next_id = 1
+        while next_id in numeric_ids:
+            next_id += 1
+        
+        return str(next_id)
+    
     def get_profiles_by_tag(self, tag: str) -> List[VoiceProfile]:
         """Obtiene perfiles por tag"""
         return [p for p in self.profiles.values() if tag in p.tags]
     
     def save_to_file(self):
         """Guarda todas las voces a JSON"""
-        data = {
-            "default_voice": self.default_voice_id,
-            "profiles": {
-                pid: profile.to_dict() 
-                for pid, profile in self.profiles.items()
+        try:
+            data = {
+                "default_voice": self.default_voice_id,
+                "profiles": {
+                    pid: profile.to_dict() 
+                    for pid, profile in self.profiles.items()
+                }
             }
-        }
-        
-        with open(self.config_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        
-        print(f"Configuración guardada en {self.config_path}")
+            
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
+            print(f"✅ Configuración guardada en {self.config_path} ({len(self.profiles)} voces)")
+            
+        except PermissionError as e:
+            print(f"❌ Error de permisos al guardar {self.config_path}: {e}")
+        except Exception as e:
+            print(f"❌ Error guardando configuración en {self.config_path}: {e}")
+            import traceback
+            traceback.print_exc()
     
     def load_from_file(self):
         """Carga voces desde JSON"""
@@ -185,37 +247,50 @@ class VoiceManager:
         Agrega automáticamente un modelo RVC encontrado.
         Retorna el profile_id creado o None si falla.
         """
-        model_name = os.path.splitext(os.path.basename(model_path))[0]
-        profile_id = model_name.lower().replace(" ", "_")
-        
-        # Determinar voz base según género
-        base_voice = "es-MX-JorgeNeural" if gender == "male" else "es-MX-DaliaNeural"
-        
-        profile = VoiceProfile(
-            profile_id=profile_id,
-            display_name=model_name.title(),
-            tts_config=EdgeTTSConfig(
-                voice_id=base_voice,
-                speed=1.0,
-                pitch=0
-            ),
-            rvc_config=RVCConfig(
-                model_id=profile_id,
-                name=model_name.title(),
-                model_path=model_path,
-                pitch_shift=0,
-                index_rate=0.75,
-                filter_radius=3,
-                rms_mix_rate=0.25,
-                protect=0.33,
-                f0_method="rmvpe",
-                gender=gender,
-                description=f"Auto-detectado desde {model_path}"
-            ),
-            tags=["character", "auto-detected"]
-        )
-        
-        if self.add_profile(profile):
-            print(f"Modelo auto-agregado: {profile_id}")
-            return profile_id
-        return None
+        try:
+            # Usar el nombre de la carpeta que contiene el .pth
+            folder_name = os.path.basename(os.path.dirname(model_path))
+            model_name = folder_name
+            
+            # Asignar ID consecutivo (1, 2, 3...)
+            profile_id = self._get_next_available_id()
+            
+            # Determinar voz base según género
+            base_voice = "es-MX-JorgeNeural" if gender == "male" else "es-MX-DaliaNeural"
+            
+            profile = VoiceProfile(
+                profile_id=profile_id,
+                display_name=model_name.title(),
+                tts_config=EdgeTTSConfig(
+                    voice_id=base_voice,
+                    speed=1.0,
+                    pitch=0
+                ),
+                rvc_config=RVCConfig(
+                    model_id=profile_id,
+                    name=model_name.title(),
+                    model_path=model_path,
+                    pitch_shift=0,
+                    index_rate=0.75,
+                    filter_radius=3,
+                    rms_mix_rate=0.25,
+                    protect=0.33,
+                    f0_method="rmvpe",
+                    gender=gender,
+                    description=f"Auto-detectado desde {model_path}"
+                ),
+                tags=["character", "auto-detected"]
+            )
+            
+            if self.add_profile(profile):
+                print(f"✅ Modelo auto-agregado: {model_name} (ID: {profile_id})")
+                return profile_id
+            else:
+                print(f"❌ Error al agregar perfil {model_name}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error en auto_add_rvc_model para {model_path}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None

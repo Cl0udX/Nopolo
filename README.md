@@ -115,7 +115,7 @@ StreamTTS/
 - [x] Sistema de efectos de sonido integrado
 - [x] Filtros de audio (reverb, phone, pitch, robot, etc.)
 - [x] Filtros de fondo (ambiente/contexto durante la voz)
-- [ ] Endpoint API `/synthesize/advanced` para mensajes complejos
+- [x] Endpoint API `/synthesize/advanced` para mensajes complejos
 - [ ] Integración directa con Streamer.bot
 - [ ] Configuración avanzada desde la interfaz
 - [ ] Optimización de latencia
@@ -289,6 +289,8 @@ pip install torch torchvision torchaudio
 pip install git+https://github.com/Tps-F/fairseq.git@main (Como administrador)
 
 pip install fastapi uvicorn pydantic python-dotenv aiohttp
+
+pip install tensorboardX
 
 pip install google-cloud-texttospeech
 ```

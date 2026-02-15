@@ -15,6 +15,8 @@
 // VOCES DISPONIBLES:
 // ------------------
 // • homero, dross, bugs, patolucas (o las que hayas configurado)
+// • random o aleatorio - Usa una voz aleatoria sin RVC (solo TTS)
+// • Si la voz no existe, se usa automáticamente una voz aleatoria sin RVC
 //
 // CONFIGURACIÓN:
 // --------------
@@ -67,7 +69,7 @@ public class CPHInline
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             string textoSeguro = PrepararMensajeParaJSON(texto);
             string vozSegura = PrepararMensajeParaJSON(voz);
-            string json = "{\"text\":\"" + textoSeguro + "\",\"voice\":\"" + vozSegura + "\"}";
+            string json = "{\"text\":\"" + textoSeguro + "\",\"voice_id\":\"" + vozSegura + "\"}";
 
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             // PASO 4: Enviar al servidor de Nopolo

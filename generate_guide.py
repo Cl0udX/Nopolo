@@ -12,7 +12,7 @@ def load_json_config(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        print(f"⚠️ Error al cargar {file_path}: {e}")
+        print(f"Error al cargar {file_path}: {e}")
         return {}
 
 def generate_voice_cards(voices_list):
@@ -66,8 +66,8 @@ def generate_html_guide():
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(generate_html_content(voices_list, sounds_list, backgrounds_list))
     
-    print(f"✅ Guía HTML generada: {output_path}")
-    print(f"📊 {len(voices_list)} voces | {len(sounds_list)} sonidos | {len(backgrounds_list)} fondos")
+    print(f"Guía HTML generada: {output_path}")
+    print(f"{len(voices_list)} voces | {len(sounds_list)} sonidos | {len(backgrounds_list)} fondos")
 
 def generate_html_content(voices_list, sounds_list, backgrounds_list):
     return f'''<!DOCTYPE html>
@@ -271,5 +271,5 @@ evt.currentTarget.classList.add("active");
 </html>'''
 
 if __name__ == '__main__':
-    print("🎨 Generando guía HTML para Nopolo TTS...")
+    print("Generando guía HTML para Nopolo TTS...")
     generate_html_guide()

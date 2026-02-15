@@ -199,16 +199,18 @@ class SoundManager:
         
         return sounds
     
-    def add_sound(self, sound_id: str, name: str, filename: str, 
-                  category: str = "other", duration_ms: int = 1000) -> bool:
+    def add_sound(self, sound_id: str, name: str, filename: str = None, path: str = None,
+                  category: str = "other", description: str = "", duration_ms: int = 1000) -> bool:
         """
         Agrega un nuevo sonido a la configuración.
         
         Args:
             sound_id: ID único del sonido
             name: Nombre del sonido (sin espacios)
-            filename: Nombre del archivo en sounds/
+            filename: Nombre del archivo en sounds/ (opcional si se proporciona path)
+            path: Ruta completa al archivo (opcional, toma prioridad sobre filename)
             category: Categoría del sonido
+            description: Descripción del sonido
             duration_ms: Duración aproximada en milisegundos
             
         Returns:
@@ -217,6 +219,11 @@ class SoundManager:
         # Validar que el ID no exista
         if sound_id in self.sounds_by_id:
             print(f"Ya existe un sonido con ID {sound_id}")
+            return False
+        
+        # Validar que se proporcione filename o path
+        if not filename and not path:
+            print("Debe proporcionar 'filename' o 'path'")
             return False
         
         # Validar que el nombre no tenga espacios
@@ -232,10 +239,18 @@ class SoundManager:
         new_sound = {
             "id": sound_id,
             "name": name,
-            "filename": filename,
             "category": category,
+            "description": description,
             "duration_ms": duration_ms
         }
+        
+        # Agregar filename o path según corresponda
+        if path:
+            new_sound["path"] = path
+            # Si se proporciona path, filename es opcional (usar basename si no se especifica)
+            new_sound["filename"] = filename if filename else os.path.basename(path)
+        else:
+            new_sound["filename"] = filename
         
         config["sounds"].append(new_sound)
         
@@ -250,15 +265,18 @@ class SoundManager:
         return True
     
     def update_sound(self, sound_id: str, name: str = None, filename: str = None,
-                    category: str = None, duration_ms: int = None) -> bool:
+                    path: str = None, category: str = None, description: str = None, 
+                    duration_ms: int = None) -> bool:
         """
         Actualiza un sonido existente.
         
         Args:
             sound_id: ID del sonido a actualizar
             name: Nuevo nombre (opcional)
-            filename: Nuevo archivo (opcional)
+            filename: Nuevo nombre de archivo (opcional)
+            path: Nueva ruta completa (opcional, toma prioridad sobre filename)
             category: Nueva categoría (opcional)
+            description: Nueva descripción (opcional)
             duration_ms: Nueva duración (opcional)
             
         Returns:
@@ -282,11 +300,26 @@ class SoundManager:
                         return False
                     sound["name"] = name
                 
-                if filename is not None:
+                # Si se proporciona path, actualizar path y filename
+                if path is not None:
+                    sound["path"] = path
+                    # Actualizar filename al basename si no se especificó explícitamente
+                    if filename is None:
+                        sound["filename"] = os.path.basename(path)
+                    else:
+                        sound["filename"] = filename
+                elif filename is not None:
+                    # Solo actualizar filename si no se proporcionó path
                     sound["filename"] = filename
+                    # Remover path si existía (ahora usa sounds/ + filename)
+                    if "path" in sound:
+                        del sound["path"]
                 
                 if category is not None:
                     sound["category"] = category
+                
+                if description is not None:
+                    sound["description"] = description
                 
                 if duration_ms is not None:
                     sound["duration_ms"] = duration_ms
@@ -302,6 +335,10 @@ class SoundManager:
         
         print(f"Sonido actualizado: {sound_id}")
         return True
+    
+    def reload(self):
+        """Recarga la configuración desde el archivo JSON."""
+        self._load_config()
     
     def sound_exists(self, identifier: str) -> bool:
         """

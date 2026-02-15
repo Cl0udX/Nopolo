@@ -215,6 +215,9 @@ class BackgroundManager:
         self.backgrounds_by_name[name.lower()] = background
         
         self._save_config()
+        
+        # Recargar para sincronizar todos los índices
+        self._load_config()
     
     def update_background_volume(self, identifier: str, volume: float):
         """
@@ -229,6 +232,8 @@ class BackgroundManager:
             bg_id = bg['id']
             self.backgrounds[bg_id]['volume'] = max(0.0, min(1.0, volume))
             self._save_config()
+            # Recargar para sincronizar todos los índices
+            self._load_config()
     
     def update_background(self, bg_id: str, name: str = None, path: str = None,
                          description: str = None, volume: float = None):
@@ -268,6 +273,13 @@ class BackgroundManager:
         
         # Guardar configuración
         self._save_config()
+        
+        # Recargar para sincronizar todos los índices
+        self._load_config()
+    
+    def reload(self):
+        """Recarga la configuración desde el archivo JSON."""
+        self._load_config()
     
     def list_backgrounds(self) -> Dict[str, Dict]:
         """
@@ -308,6 +320,9 @@ class BackgroundManager:
             
             # Guardar configuración
             self._save_config()
+            
+            # Recargar para sincronizar todos los índices
+            self._load_config()
             
             print(f"Fondo '{bg_id}' eliminado correctamente")
             return True

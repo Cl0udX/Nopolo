@@ -13,6 +13,9 @@ class EffectsManagerMixin:
         """Abre diálogo para agregar efecto/fondo"""
         dialog = EffectEditorDialog(self, is_new=True, effect_type=effect_type)
         if dialog.exec():
+            # Recargar managers desde archivo
+            self.sound_manager.reload()
+            self.background_manager.reload()
             # Recargar solo la tabla correspondiente
             if effect_type == "sound":
                 self._load_sounds_table()
@@ -23,12 +26,16 @@ class EffectsManagerMixin:
         """Edita un sonido existente"""
         dialog = EffectEditorDialog(self, is_new=False, effect_data=sound_data, effect_type="sound")
         if dialog.exec():
+            # Recargar manager desde archivo antes de actualizar tabla
+            self.sound_manager.reload()
             self._load_sounds_table()
     
     def _edit_background(self, bg_id, bg_data):
         """Edita un fondo existente"""
         dialog = EffectEditorDialog(self, is_new=False, effect_data=bg_data, effect_type="background")
         if dialog.exec():
+            # Recargar manager desde archivo antes de actualizar tabla
+            self.background_manager.reload()
             self._load_backgrounds_table()
     
     def _delete_sound(self, sound_id):
@@ -41,6 +48,7 @@ class EffectsManagerMixin:
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.sound_manager.remove_sound(sound_id)
+            self.sound_manager.reload()
             self._load_sounds_table()
     
     def _delete_background(self, bg_id):
@@ -53,6 +61,7 @@ class EffectsManagerMixin:
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.background_manager.remove_background(bg_id)
+            self.background_manager.reload()
             self._load_backgrounds_table()
     
     def _play_sound_preview(self, sound_id):

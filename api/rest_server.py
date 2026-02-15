@@ -86,13 +86,14 @@ class TTSAPIServer:
     
     def __init__(self, voice_manager: VoiceManager, audio_queue: AudioQueue, 
                  tts_engine: TTSEngine = None, rvc_engine: RVCEngine = None,
-                 host: str = "0.0.0.0", port: int = 8000):
+                 host: str = "0.0.0.0", port: int = 8000, main_window = None):
         self.voice_manager = voice_manager
         self.audio_queue = audio_queue
         self.tts_engine = tts_engine or TTSEngine()
         self.rvc_engine = rvc_engine or RVCEngine()
         self.host = host
         self.port = port
+        self.main_window = main_window
         
         # Crear procesador avanzado para mensajes multi-voz
         self.advanced_processor = AdvancedAudioProcessor(
@@ -100,6 +101,11 @@ class TTSAPIServer:
             tts_engine=self.tts_engine,
             rvc_engine=self.rvc_engine
         )
+        
+        # Cola dedicada para mensajes multi-voz (evita cancelar audio anterior)
+        import queue as queue_module
+        self.multivoice_queue = queue_module.Queue()
+        self._start_multivoice_worker()
         
         # Crear app FastAPI
         self.app = FastAPI(
@@ -125,6 +131,94 @@ class TTSAPIServer:
         # Thread del server
         self.server_thread = None
         self.is_running = False
+    
+    def _get_random_tts_only_voice(self):
+        """
+        Obtiene una voz aleatoria que solo usa TTS (sin RVC).
+        
+        Returns:
+            VoiceProfile o None si no hay voces disponibles
+        """
+        import random
+        
+        # Filtrar voces que NO tienen RVC (solo TTS)
+        tts_only_voices = [
+            profile for profile in self.voice_manager.profiles.values()
+            if profile.enabled and profile.rvc_config is None
+        ]
+        
+        if not tts_only_voices:
+            print("No hay voces solo-TTS disponibles")
+            return None
+        
+        # Seleccionar una aleatoria
+        selected = random.choice(tts_only_voices)
+        print(f"Voz aleatoria seleccionada: {selected.display_name} (ID: {selected.profile_id})")
+        return selected
+    
+    def _start_multivoice_worker(self):
+        """Inicia el worker thread para procesar cola multi-voz secuencialmente"""
+        def multivoice_worker():
+            from core.audio_player import play_wav
+            import gc
+            
+            while True:
+                try:
+                    # Obtener siguiente item de la cola
+                    text = self.multivoice_queue.get()
+                    
+                    print(f"[Worker] Procesando: {text[:50]}...")
+                    
+                    # Procesar mensaje (puede tardar varios segundos con TTS + RVC)
+                    audio_data, sample_rate = self.advanced_processor.process_message(text)
+                    
+                    # Enviar evento al overlay JUSTO ANTES de reproducir (cuando el audio está listo)
+                    if self.main_window and hasattr(self.main_window, '_send_overlay_event'):
+                        self.main_window._send_overlay_event(text, "Multi-Voz", is_nopolo=True)
+                    
+                    # Reproducir (esto bloquea hasta que termine el audio)
+                    play_wav((audio_data, sample_rate))
+                    
+                    # Limpiar overlay cuando termina
+                    if self.main_window and hasattr(self.main_window, '_clear_overlay'):
+                        self.main_window._clear_overlay()
+                    
+                    # Limpiar memoria AGRESIVAMENTE después de cada procesamiento
+                    del audio_data
+                    gc.collect()
+                    
+                    print(f"[Worker] ✅ Completado exitosamente")
+                    
+                except MemoryError as e:
+                    print(f"⚠️ [Worker] Error de memoria en multi-voz: {e}")
+                    if self.main_window and hasattr(self.main_window, '_clear_overlay'):
+                        self.main_window._clear_overlay()
+                    # Limpieza agresiva
+                    gc.collect()
+                    
+                except RuntimeError as e:
+                    print(f"⚠️ [Worker] Error de runtime (GPU/CUDA): {e}")
+                    if self.main_window and hasattr(self.main_window, '_clear_overlay'):
+                        self.main_window._clear_overlay()
+                    # Limpieza agresiva
+                    gc.collect()
+                    
+                except Exception as e:
+                    import traceback
+                    print(f"⚠️ [Worker] Error en worker multi-voz: {e}")
+                    traceback.print_exc()
+                    if self.main_window and hasattr(self.main_window, '_clear_overlay'):
+                        self.main_window._clear_overlay()
+                    # Limpieza agresiva
+                    gc.collect()
+                    
+                finally:
+                    self.multivoice_queue.task_done()
+        
+        # Iniciar worker thread
+        worker_thread = threading.Thread(target=multivoice_worker, daemon=True)
+        worker_thread.start()
+        print("Worker multi-voz iniciado")
     
     def _setup_routes(self):
         """Configura todas las rutas de la API"""
@@ -161,22 +255,43 @@ class TTSAPIServer:
             - **text**: Texto a sintetizar (requerido)
             - **voice_id**: ID del perfil de voz (opcional, usa default)
             - **priority**: Prioridad en cola (opcional, default=0)
+            
+            Si la voz no existe o se especifica "random"/"aleatorio", 
+            se usa una voz aleatoria sin RVC (solo TTS).
             """
             try:
+                profile = None
+                
                 # Obtener perfil de voz
                 if request.voice_id:
-                    profile = self.voice_manager.get_profile(request.voice_id)
-                    if not profile:
-                        raise HTTPException(
-                            status_code=404, 
-                            detail=f"Voice profile '{request.voice_id}' not found"
-                        )
-                    if not profile.enabled:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Voice profile '{request.voice_id}' is disabled"
-                        )
+                    # Caso especial: voz aleatoria sin RVC
+                    if request.voice_id.lower() in ["random", "aleatorio", "aleatoria"]:
+                        profile = self._get_random_tts_only_voice()
+                        if not profile:
+                            raise HTTPException(
+                                status_code=500,
+                                detail="No hay voces solo-TTS disponibles para selecci\u00f3n aleatoria"
+                            )
+                    else:
+                        # Intentar obtener la voz especificada (por ID o nombre)
+                        profile = self.voice_manager.get_profile_by_name_or_id(request.voice_id)
+                        
+                        # Si no existe, usar voz aleatoria sin RVC como fallback
+                        if not profile:
+                            print(f"\u26a0\ufe0f Voz '{request.voice_id}' no encontrada, usando voz aleatoria sin RVC")
+                            profile = self._get_random_tts_only_voice()
+                            if not profile:
+                                raise HTTPException(
+                                    status_code=404,
+                                    detail=f"Voice profile '{request.voice_id}' not found y no hay voces solo-TTS disponibles"
+                                )
+                        elif not profile.enabled:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"Voice profile '{request.voice_id}' is disabled"
+                            )
                 else:
+                    # Si no se especifica, usar voz por defecto
                     profile = self.voice_manager.get_default_profile()
                     if not profile:
                         raise HTTPException(
@@ -199,6 +314,36 @@ class TTSAPIServer:
                 raise
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/tts/multivoice", response_model=TTSResponse)
+        async def synthesize_multivoice(request: TTSRequest):
+            """
+            Sintetiza mensajes con múltiples voces usando sintaxis Mopolo.
+            
+            Soporta:
+            - **Voces**: `nombre: texto` o `id: texto`
+            - **Sonidos**: `(nombre)` o `(id)`
+            - **Filtros**: `nombre.filtro: texto` (r, p, pu, pd, m, a, l)
+            - **Fondos**: `nombre.fondo: texto` (fa, fb, fc, fd, fe)
+            
+            Ejemplo: `"dross: hola (disparo) homero: doh! reportero.fa: en vivo"`
+            """
+            try:
+                # Agregar a la cola dedicada de multi-voz (procesamiento secuencial)
+                self.multivoice_queue.put(request.text)
+                queue_pos = self.multivoice_queue.qsize()
+                
+                return TTSResponse(
+                    success=True,
+                    message=f"Multi-voice message queued (position {queue_pos})",
+                    queue_position=queue_pos,
+                    voice_used="multi-voice"
+                )
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"Error queueing multi-voice: {str(e)}")
         
         @self.app.get("/api/voices", response_model=List[VoiceProfileResponse])
         async def list_voices():

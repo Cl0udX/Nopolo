@@ -168,6 +168,9 @@ class EffectsManagerDialog(QDialog):
         """Muestra el diálogo para agregar un nuevo efecto."""
         dialog = EffectEditorDialog(self, is_new=True)
         if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Recargar managers desde archivo antes de actualizar tabla
+            self.sound_manager.reload()
+            self.background_manager.reload()
             self._load_effects_table()
             self.effects_updated.emit()
     
@@ -182,6 +185,9 @@ class EffectsManagerDialog(QDialog):
         if data:
             dialog = EffectEditorDialog(self, is_new=False, effect_data=data, effect_type=effect_type)
             if dialog.exec() == QDialog.DialogCode.Accepted:
+                # Recargar managers desde archivo antes de actualizar tabla
+                self.sound_manager.reload()
+                self.background_manager.reload()
                 self._load_effects_table()
                 self.effects_updated.emit()
     
@@ -231,7 +237,13 @@ class EffectEditorDialog(QDialog):
         super().__init__(parent)
         self.is_new = is_new
         self.effect_data = effect_data or {}
-        self.effect_type = effect_type
+        # Normalizar effect_type a formato con mayúscula
+        if effect_type.lower() == "sound" or effect_type.lower() == "sonido":
+            self.effect_type = "Sonido"
+        elif effect_type.lower() == "background" or effect_type.lower() == "fondo":
+            self.effect_type = "Fondo"
+        else:
+            self.effect_type = effect_type
         
         self.setWindowTitle("Agregar Efecto" if is_new else "Editar Efecto")
         self.resize(500, 400)
@@ -243,6 +255,8 @@ class EffectEditorDialog(QDialog):
         
         if not is_new and effect_data:
             self._load_data()
+            # Actualizar visibilidad de volumen después de cargar datos
+            self._update_volume_visibility()
     
     def _setup_ui(self):
         """Configura la interfaz del editor."""
@@ -359,7 +373,11 @@ class EffectEditorDialog(QDialog):
     
     def _update_volume_visibility(self):
         """Muestra/oculta controles de volumen según el tipo."""
-        is_background = self.radio_background.isChecked() if self.is_new else self.effect_type == "Fondo"
+        if self.is_new:
+            is_background = self.radio_background.isChecked()
+        else:
+            is_background = self.effect_type == "Fondo"
+        
         for widget in self.volume_widgets:
             widget.setVisible(is_background)
     
@@ -389,9 +407,24 @@ class EffectEditorDialog(QDialog):
     
     def _load_data(self):
         """Carga datos existentes en el formulario."""
-        self.input_id.setText(self.effect_data.get('id', ''))
+        effect_id = self.effect_data.get('id', '')
+        self.input_id.setText(str(effect_id))
         self.input_name.setText(self.effect_data.get('name', ''))
-        self.input_file.setText(self.effect_data.get('path', ''))
+        
+        # Obtener ruta del archivo según el tipo
+        if self.effect_type == "Fondo":
+            # Los fondos siempre tienen 'path'
+            file_path = self.effect_data.get('path', '')
+        else:
+            # Los sonidos pueden tener 'path' o 'filename'
+            if 'path' in self.effect_data and self.effect_data['path']:
+                file_path = self.effect_data['path']
+            else:
+                # Obtener ruta completa usando el manager
+                sound_path = self.sound_manager.get_sound_path(effect_id)
+                file_path = str(sound_path) if sound_path else ''
+        
+        self.input_file.setText(file_path)
         self.input_description.setText(self.effect_data.get('description', ''))
         
         if self.effect_type == "Fondo":
@@ -419,8 +452,13 @@ class EffectEditorDialog(QDialog):
         else:
             is_background = self.effect_type == "Fondo"
         
-        # Generar ID si no se proporcionó
-        effect_id = self.input_id.text().strip()
+        # Obtener ID (si está editando, usar el existente)
+        if not self.is_new:
+            effect_id = self.effect_data.get('id', '')
+        else:
+            # Generar ID si no se proporcionó
+            effect_id = self.input_id.text().strip()
+        
         if not effect_id:
             if is_background:
                 # Generar ID para fondo (fa, fb, fc, ...)
@@ -460,24 +498,24 @@ class EffectEditorDialog(QDialog):
                         volume=volume
                     )
             else:
-                # Para sonidos, usar solo el nombre del archivo
-                filename = os.path.basename(file_path)
-                
+                # Para sonidos, guardar la ruta completa
                 if self.is_new:
                     # Crear nuevo sonido
                     self.sound_manager.add_sound(
                         sound_id=effect_id,
                         name=name,
-                        filename=filename,
-                        category=description or "custom"
+                        path=file_path,
+                        category="custom",
+                        description=description
                     )
                 else:
                     # Actualizar sonido existente
                     self.sound_manager.update_sound(
                         sound_id=effect_id,
                         name=name,
-                        filename=filename,
-                        category=description or "custom"
+                        path=file_path,
+                        category="custom",
+                        description=description
                     )
             
             QMessageBox.information(self, "Éxito", f"{'Fondo' if is_background else 'Sonido'} guardado correctamente")

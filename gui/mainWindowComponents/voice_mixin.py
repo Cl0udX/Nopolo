@@ -2,6 +2,7 @@
 Mixin para gestión de voces.
 Contiene métodos para cargar, agregar, editar y escanear voces.
 """
+import os
 from gui.voice_config_dialog import VoiceConfigDialog
 
 
@@ -117,20 +118,32 @@ class VoiceMixin:
     
     def _scan_models(self):
         """Escanea y agrega automáticamente nuevos modelos"""
+        print("\n🔍 Iniciando escaneo de modelos...")
         new_models = self.voice_manager.scan_rvc_models()
         
         if not new_models:
-            print("No se encontraron modelos nuevos")
+            print("✓ No se encontraron modelos nuevos")
             return
         
-        print(f"{len(new_models)} modelos nuevos encontrados")
+        print(f"🎙️ {len(new_models)} modelos nuevos encontrados:")
         
+        added_count = 0
         for model_path in new_models:
+            folder_name = os.path.basename(os.path.dirname(model_path))
+            print(f"   → Agregando: {folder_name}")
             profile_id = self.voice_manager.auto_add_rvc_model(model_path, gender="male")
             if profile_id:
-                print(f"{profile_id}")
+                print(f"      ✅ Perfil creado con ID: {profile_id}")
+                added_count += 1
+            else:
+                print(f"      ❌ Error al crear perfil")
         
+        print(f"\n✅ Se agregaron {added_count}/{len(new_models)} modelos")
+        print(f"📁 Guardado en: {self.voice_manager.config_path}")
+        
+        # Recargar lista de voces en la GUI
         self._load_voices()
+        print("🔄 GUI actualizada\n")
     
     def _on_multivoice_toggled(self, checked):
         """Callback cuando se activa/desactiva el modo multi-voz."""

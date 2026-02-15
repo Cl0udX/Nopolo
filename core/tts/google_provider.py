@@ -36,6 +36,32 @@ class GoogleTTSConfig:
         self.pitch = pitch
         self.sample_rate = sample_rate
         self.credentials_path = credentials_path
+    
+    def to_dict(self):
+        """Convierte a diccionario para serialización JSON"""
+        return {
+            'provider_name': self.provider_name,
+            'voice_id': self.voice_id,
+            'language_code': self.language_code,
+            'rate': self.rate,
+            'volume': self.volume,
+            'pitch': self.pitch,
+            'sample_rate': self.sample_rate,
+            'credentials_path': self.credentials_path
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict):
+        """Crea instancia desde diccionario"""
+        return cls(
+            voice_id=data.get('voice_id', 'es-US-Neural2-A'),
+            language_code=data.get('language_code', 'es-US'),
+            rate=data.get('rate', '+0%'),
+            volume=data.get('volume', '+0%'),
+            pitch=data.get('pitch', 0),
+            sample_rate=data.get('sample_rate', 24000),
+            credentials_path=data.get('credentials_path')
+        )
 
 
 class GoogleTTSProvider(BaseTTSProvider):

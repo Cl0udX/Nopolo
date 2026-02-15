@@ -54,6 +54,10 @@ class RVCEngine:
         self.model_loaded = False
         self.index_path = None
         
+        # Contador de conversiones para prevenir memory leaks
+        self.conversion_count = 0
+        self.max_conversions_before_restart = 50  # Reiniciar motor cada 50 conversiones
+        
         # Cargar modelo si se proporcionó config
         if config:
             self.load_model(config)
@@ -202,8 +206,22 @@ class RVCEngine:
             total_time = sum(times.values()) if times else 0
             print(f"Conversión RVC exitosa ({total_time:.2f}s, SR: {tgt_sr} Hz)")
             
-            # Limpiar cache de MPS después de procesar
+            # Incrementar contador de conversiones
+            self.conversion_count += 1
+            
+            # Limpiar modelo RMVPE de memoria (causa principal de leaks)
+            self._cleanup_rmvpe_model()
+            
+            # Limpiar cache de GPU después de procesar
             self._cleanup_memory()
+            
+            # Log de uso de memoria GPU
+            self._log_gpu_memory()
+            
+            # Verificar si necesitamos reiniciar el motor RVC
+            if self.conversion_count >= self.max_conversions_before_restart:
+                print(f"⚠️ {self.conversion_count} conversiones completadas - Reiniciando motor RVC para prevenir memory leaks...")
+                self._restart_engine()
             
             # Retornar como tupla (wav_data, rate)
             return (audio_opt.astype(np.float32) / 32768.0, tgt_sr)
@@ -234,6 +252,8 @@ class RVCEngine:
             force: Si es True, hace limpieza agresiva (gc.collect + empty_cache)
         """
         try:
+            import gc
+            
             # Limpiar cache de MPS (Apple Silicon)
             if torch.backends.mps.is_available():
                 torch.mps.empty_cache()
@@ -250,12 +270,78 @@ class RVCEngine:
                 else:
                     print("Cache CUDA limpiado")
             
-            # Recolección de basura forzada si se pidió
+            # Siempre ejecutar garbage collector (no solo cuando force=True)
+            gc.collect()
+            
+            # Log adicional solo si es forzado
             if force:
-                import gc
-                gc.collect()
-                print("Garbage collector ejecutado")
+                print("Garbage collector ejecutado (agresivo)")
                 
         except Exception as e:
             # No fallar si la limpieza falla
+            pass
+    
+    def _cleanup_rmvpe_model(self):
+        """
+        Limpia el modelo RMVPE de memoria después de cada conversión.
+        Esto previene memory leaks que causan segmentation faults.
+        """
+        try:
+            # Liberar modelo RMVPE del pipeline si existe
+            if hasattr(self.vc, 'pipeline') and self.vc.pipeline:
+                if hasattr(self.vc.pipeline, 'model_rmvpe'):
+                    del self.vc.pipeline.model_rmvpe
+                    print("Modelo RMVPE liberado de memoria")
+        except Exception as e:
+            pass  # Ignorar errores
+    
+    def _log_gpu_memory(self):
+        """
+        Log de uso de memoria GPU para debugging.
+        """
+        try:
+            if torch.cuda.is_available():
+                allocated = torch.cuda.memory_allocated() / 1024**2  # MB
+                reserved = torch.cuda.memory_reserved() / 1024**2  # MB
+                print(f"GPU Memory: {allocated:.1f}MB allocated, {reserved:.1f}MB reserved (Conv #{self.conversion_count})")
+        except Exception as e:
+            pass  # Ignorar errores
+    
+    def _restart_engine(self):
+        """
+        Reinicia el motor RVC completamente para prevenir memory leaks.
+        Recarga el modelo actual después del reinicio.
+        """
+        try:
+            # Guardar configuración actual
+            current_config = self.config
+            
+            # Limpiar completamente el VC actual
+            if hasattr(self.vc, 'pipeline'):
+                del self.vc.pipeline
+            if hasattr(self.vc, 'net_g'):
+                del self.vc.net_g
+            if hasattr(self.vc, 'hubert_model'):
+                del self.vc.hubert_model
+            
+            # Limpieza agresiva de memoria
+            self._cleanup_memory(force=True)
+            
+            # Recrear VC
+            self.vc = VC()
+            
+            # Recargar modelo si había uno
+            if current_config:
+                self.model_loaded = False  # Reset flag
+                self.load_model(current_config)
+            
+            # Resetear contador
+            self.conversion_count = 0
+            
+            print("✅ Motor RVC reiniciado exitosamente")
+            
+        except Exception as e:
+            print(f"⚠️ Error reiniciando motor RVC: {e}")
+            # Intentar al menos resetear el contador
+            self.conversion_count = 0
             print(f"Error limpiando memoria (no crítico): {e}")

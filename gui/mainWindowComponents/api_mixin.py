@@ -16,7 +16,8 @@ class APIMixin:
                 voice_manager=self.voice_manager,
                 audio_queue=self.audio_queue,
                 host=self.api_host,
-                port=self.api_port
+                port=self.api_port,
+                main_window=self
             )
             
             self.api_server.start()

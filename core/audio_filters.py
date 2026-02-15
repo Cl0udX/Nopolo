@@ -248,9 +248,26 @@ class AudioFilters:
         if background_sr != sr:
             # Calcular nuevo tamaño
             new_length = int(len(background_audio) * sr / background_sr)
-            # Resamplear usando interpolación
-            from scipy.signal import resample
-            background_resampled = resample(background_audio, new_length)
+            
+            # Protección: Si el resampling requiere mucha memoria, usar método más simple
+            estimated_memory_mb = (new_length * 4) / (1024 * 1024)  # float32 = 4 bytes
+            if estimated_memory_mb > 500:  # Más de 500MB
+                print(f"Resampling grande ({estimated_memory_mb:.1f}MB), usando método simple...")
+                # Usar interpolación lineal simple en lugar de scipy
+                indices = np.linspace(0, len(background_audio) - 1, new_length)
+                background_resampled = np.interp(indices, np.arange(len(background_audio)), background_audio)
+            else:
+                # Resamplear usando interpolación scipy
+                from scipy.signal import resample
+                try:
+                    background_resampled = resample(background_audio, new_length)
+                except MemoryError as e:
+                    print(f"Error de memoria al resamplear fondo: {e}, usando método simple")
+                    indices = np.linspace(0, len(background_audio) - 1, new_length)
+                    background_resampled = np.interp(indices, np.arange(len(background_audio)), background_audio)
+                except Exception as e:
+                    print(f"Error al resamplear fondo: {e}, usando fondo sin resamplear")
+                    background_resampled = background_audio.copy()
         else:
             background_resampled = background_audio.copy()
         
@@ -261,6 +278,10 @@ class AudioFilters:
         if bg_length < audio_length:
             # Loop del fondo si es más corto
             num_repeats = int(np.ceil(audio_length / bg_length))
+            # Limitar a máximo 100 repeticiones para evitar arrays gigantes
+            if num_repeats > 100:
+                print(f"Advertencia: Fondo muy corto ({bg_length} samples) para audio largo ({audio_length} samples)")
+                num_repeats = 100
             background_looped = np.tile(background_resampled, num_repeats)
             background_final = background_looped[:audio_length]
         else:
@@ -278,6 +299,11 @@ class AudioFilters:
         # Normalizar resultado final para evitar clipping
         if np.max(np.abs(mixed)) > 0:
             mixed = mixed / np.max(np.abs(mixed)) * 0.95
+        
+        # Validar que el resultado sea finito
+        if not np.isfinite(mixed).all():
+            print("Audio mezclado contiene valores inválidos, limpiando...")
+            mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.95, neginf=-0.95)
         
         return mixed.astype(np.float32)
     
