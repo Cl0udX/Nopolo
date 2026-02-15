@@ -4,6 +4,8 @@ import argparse
 import os
 from dotenv import load_dotenv
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtCore import Qt
 
 # Cargar variables de entorno
 load_dotenv()
@@ -19,6 +21,32 @@ def get_env_int(key: str, default: int) -> int:
         return int(os.getenv(key, str(default)))
     except ValueError:
         return default
+
+def setup_windows_taskbar_icon():
+    """Configura el icono para la barra de tareas de Windows"""
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            # Establecer App User Model ID para que Windows reconozca la app
+            myappid = 'nopolo.voicestudio.app.1'
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except:
+            pass  # Si falla, continuar sin icono en taskbar
+
+def setup_app_icon(app: QApplication):
+    """Configura el icono de la aplicación"""
+    icon_path = os.path.join(os.path.dirname(__file__), "assets", "nopolo_icon.png")
+    if os.path.exists(icon_path):
+        icon = QIcon(icon_path)
+        pixmap = QPixmap(icon_path)
+        # Añadir múltiples tamaños al icono para mejor compatibilidad con Windows
+        icon.addPixmap(pixmap.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        icon.addPixmap(pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        icon.addPixmap(pixmap.scaled(48, 48, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        icon.addPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        icon.addPixmap(pixmap.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        icon.addPixmap(pixmap.scaled(256, 256, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        app.setWindowIcon(icon)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -89,8 +117,12 @@ Configuración en .env para personalizar rutas y puertos.
         print(f"Documentación: http://localhost:{args.api_port}/docs")
         print("=" * 70)
         
+        # Configurar icono de taskbar ANTES de crear QApplication
+        setup_windows_taskbar_icon()
+        
         from gui.main_window import MainWindow
         app = QApplication(sys.argv)
+        setup_app_icon(app)
         window = MainWindow(
             enable_api=True,
             api_host=args.api_host,
@@ -104,8 +136,12 @@ Configuración en .env para personalizar rutas y puertos.
         print("Tip: Usa --with-api para habilitar el servidor REST")
         print("=" * 70)
         
+        # Configurar icono de taskbar ANTES de crear QApplication
+        setup_windows_taskbar_icon()
+        
         from gui.main_window import MainWindow
         app = QApplication(sys.argv)
+        setup_app_icon(app)
         window = MainWindow()
         window.show()
         sys.exit(app.exec())

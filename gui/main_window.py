@@ -3,7 +3,8 @@ Ventana principal de Nopolo - Voice Cloning TTS.
 Utiliza mixins para organizar la funcionalidad en componentes modulares.
 """
 from PySide6.QtWidgets import QApplication, QWidget
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QIcon, QPixmap
 from core.tts_engine import TTSEngine
 from core.rvc_engine import RVCEngine
 from core.audio_queue import AudioQueue
@@ -46,8 +47,23 @@ class MainWindow(
     
     def __init__(self, enable_api=False, api_host="0.0.0.0", api_port=8000):
         super().__init__()
-        self.setWindowTitle("Nopolo - Voice Cloning TTS")
+        self.setWindowTitle("Nopolo")
         self.resize(1400, 550)  # Más ancho y altura moderada para la consola
+        
+        # Establecer icono de ventana con múltiples tamaños
+        import os
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "nopolo_icon.png")
+        if os.path.exists(icon_path):
+            icon = QIcon(icon_path)
+            pixmap = QPixmap(icon_path)
+            # Añadir múltiples tamaños para mejor compatibilidad con Windows taskbar
+            icon.addPixmap(pixmap.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            icon.addPixmap(pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            icon.addPixmap(pixmap.scaled(48, 48, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            icon.addPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            icon.addPixmap(pixmap.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            icon.addPixmap(pixmap.scaled(256, 256, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            self.setWindowIcon(icon)
         
         # Configuración de API
         self.enable_api = enable_api

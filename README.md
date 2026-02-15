@@ -1,8 +1,23 @@
 # Nopolo
 
-![Logo](assets/logo.png "Logo del proyecto Nopolo")
+<p align="center">
+  <img src="assets/Nopolo.png" alt="Logo Nopolo" width="50%"/>
+</p>
+
+<table>
+<tr>
+<td width="60%">
 
 **Nopolo** es una herramienta open source de síntesis de voz (TTS) con conversión de personajes mediante RVC, diseñada para creadores de contenido que quieren dar vida a sus streams, videos o bots.
+
+Nació como una alternativa libre a herramientas de pago como Mopolo TTS, con el objetivo de que cualquiera pueda usar síntesis de voz profesional sin suscripciones ni servicios cerrados.
+
+</td>
+<td width="40%" align="center">
+<img src="assets/logo.png" alt="Origen del proyecto" width="100%"/>
+</td>
+</tr>
+</table>
 
 El proyecto funciona **completamente local** en tu equipo, sin depender de servicios cerrados ni suscripciones. Es una alternativa libre a herramientas de pago como Mopolo TTS.
 
@@ -18,6 +33,34 @@ El proyecto funciona **completamente local** en tu equipo, sin depender de servi
 | **Windows/Linux sin GPU** | ✅ Funcional | CPU | RMVPE | Más lento pero funcional |
 
 > **Nota para usuarios de Mac:** Nopolo detecta automáticamente macOS y ajusta el procesamiento para evitar problemas con MPS. Usa el script `./run_nopolo_gui.sh` para mejor rendimiento.
+
+
+---
+
+## ☕ Apoya el Proyecto
+
+<p align="center">
+  <a href="https://ko-fi.com/postincloud">
+    <img src="assets/nopolo_powerby.png" alt="Nopolo powered by PostInCloud" width="400"/>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/@postincloud1">
+    <img src="assets/youtube.png" alt="YouTube" width="80"/>
+  </a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="https://www.twitch.tv/postincloud">
+    <img src="assets/twitch.png" alt="Twitch" width="80"/>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://ko-fi.com/postincloud">
+    ☕ Si quieres apoyar al creador y mantenimiento, dame un café
+  </a>
+</p>
+
 
 ---
 
@@ -397,7 +440,7 @@ Cuando ejecutas con API habilitada:
 
 ---
 
----
+
 
 ## Ejecución
 

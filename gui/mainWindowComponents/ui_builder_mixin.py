@@ -8,9 +8,10 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QTabWidget, QSplitter, QTextEdit,
     QLineEdit
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QFont, QPixmap, QCursor, QDesktopServices
 import sys
+import os
 
 
 class ConsoleRedirector:
@@ -39,6 +40,21 @@ class ConsoleRedirector:
     def isatty(self):
         """Retorna False para indicar que no es una terminal TTY"""
         return False
+
+
+class ClickableLabel(QLabel):
+    """Label clicable que abre una URL en el navegador"""
+    def __init__(self, url: str, parent=None):
+        super().__init__(parent)
+        self.url = url
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.setStyleSheet("QLabel:hover { opacity: 0.8; }")
+    
+    def mousePressEvent(self, event):
+        """Abre la URL cuando se hace click"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            QDesktopServices.openUrl(QUrl(self.url))
+        super().mousePressEvent(event)
 
 
 class UIBuilderMixin:
@@ -283,6 +299,74 @@ class UIBuilderMixin:
         app_config_group.setLayout(app_config_layout)
         panel.addWidget(app_config_group)
         
+        # ========== SECCIÓN DE APOYO Y REDES SOCIALES ==========
+        social_group = QGroupBox("Apoya el Proyecto")
+        social_layout = QVBoxLayout()
+        social_layout.setSpacing(10)
+        
+        # Banner "Nopolo powered by PostInCloud" - clicable a Ko-fi
+        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "assets")
+        
+        nopolo_banner = ClickableLabel("https://ko-fi.com/postincloud")
+        banner_path = os.path.join(assets_dir, "nopolo_powerby.png")
+        if os.path.exists(banner_path):
+            pixmap = QPixmap(banner_path)
+            # Escalar a un ancho apropiado manteniendo proporción
+            scaled_pixmap = pixmap.scaledToWidth(200, Qt.TransformationMode.SmoothTransformation)
+            nopolo_banner.setPixmap(scaled_pixmap)
+            nopolo_banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            nopolo_banner.setToolTip("Apoya en Ko-fi")
+        social_layout.addWidget(nopolo_banner)
+        
+        # Botones de redes sociales (YouTube y Twitch)
+        social_buttons_layout = QHBoxLayout()
+        social_buttons_layout.addStretch()
+        
+        # Botón YouTube
+        youtube_btn = ClickableLabel("https://www.youtube.com/@postincloud1")
+        youtube_path = os.path.join(assets_dir, "youtube.png")
+        if os.path.exists(youtube_path):
+            pixmap = QPixmap(youtube_path)
+            scaled_pixmap = pixmap.scaledToWidth(60, Qt.TransformationMode.SmoothTransformation)
+            youtube_btn.setPixmap(scaled_pixmap)
+            youtube_btn.setToolTip("YouTube: @postincloud1")
+        social_buttons_layout.addWidget(youtube_btn)
+        
+        # Botón Twitch
+        twitch_btn = ClickableLabel("https://www.twitch.tv/postincloud")
+        twitch_path = os.path.join(assets_dir, "twitch.png")
+        if os.path.exists(twitch_path):
+            pixmap = QPixmap(twitch_path)
+            scaled_pixmap = pixmap.scaledToWidth(60, Qt.TransformationMode.SmoothTransformation)
+            twitch_btn.setPixmap(scaled_pixmap)
+            twitch_btn.setToolTip("Twitch: postincloud")
+        social_buttons_layout.addWidget(twitch_btn)
+        
+        social_buttons_layout.addStretch()
+        social_layout.addLayout(social_buttons_layout)
+        
+        # Texto de apoyo con enlace a Ko-fi
+        kofi_label = ClickableLabel("https://ko-fi.com/postincloud")
+        kofi_label.setText("☕ Si quieres apoyar al creador\ny mantenimiento, dame un café")
+        kofi_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        kofi_label.setStyleSheet("""
+            QLabel {
+                color: #666;
+                font-size: 11px;
+                padding: 5px;
+            }
+            QLabel:hover {
+                color: #ff5e5b;
+                text-decoration: underline;
+            }
+        """)
+        kofi_label.setWordWrap(True)
+        kofi_label.setToolTip("Haz click para apoyar en Ko-fi")
+        social_layout.addWidget(kofi_label)
+        
+        social_group.setLayout(social_layout)
+        panel.addWidget(social_group)
+        
         panel.addStretch()
         
         # Cargar providers en lista
@@ -322,6 +406,9 @@ class UIBuilderMixin:
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         
+        # Ocultar números de fila
+        self.filters_table.verticalHeader().setVisible(False)
+        
         filters_layout.addWidget(self.filters_table)
         # NO agregar botón "Agregar" para filtros (son predefinidos)
         
@@ -350,6 +437,9 @@ class UIBuilderMixin:
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        
+        # Ocultar números de fila
+        self.sounds_table.verticalHeader().setVisible(False)
         
         sounds_layout.addWidget(self.sounds_table)
         
@@ -389,6 +479,9 @@ class UIBuilderMixin:
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        
+        # Ocultar números de fila
+        self.backgrounds_table.verticalHeader().setVisible(False)
         
         backgrounds_layout.addWidget(self.backgrounds_table)
         
