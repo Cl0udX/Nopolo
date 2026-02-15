@@ -93,6 +93,20 @@ class UIBuilderMixin:
         self.add_voice_btn.clicked.connect(self._add_voice)
         voice_layout.addWidget(self.add_voice_btn)
         
+        # Botón para eliminar voz actual
+        self.delete_voice_btn = QPushButton("🗑️")
+        self.delete_voice_btn.setMaximumWidth(40)
+        self.delete_voice_btn.setToolTip("Eliminar voz seleccionada")
+        self.delete_voice_btn.clicked.connect(self._delete_voice)
+        voice_layout.addWidget(self.delete_voice_btn)
+        
+        # Botón para recargar voces desde JSON
+        self.reload_voices_btn = QPushButton("🔄")
+        self.reload_voices_btn.setMaximumWidth(40)
+        self.reload_voices_btn.setToolTip("Recargar voces desde archivo")
+        self.reload_voices_btn.clicked.connect(self._reload_voices)
+        voice_layout.addWidget(self.reload_voices_btn)
+        
         voice_group.setLayout(voice_layout)
         center_panel.addWidget(voice_group)
         

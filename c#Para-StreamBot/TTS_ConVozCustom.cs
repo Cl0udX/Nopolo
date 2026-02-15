@@ -1,10 +1,40 @@
-// ========================================
-// TTS_Nopolo.cs
-// Envía el TTS a Nopolo usando tu estructura existente
-// Usa: cleanedText (texto) y voiceToUse (voz)
-// ========================================
-// Referencias: System.dll, System.Net.Sockets.dll
-// ========================================
+// ═══════════════════════════════════════════════════════════════════════════
+// 📢 TTS_ConVoz.cs - VERSIÓN CON SELECCIÓN DE VOZ
+// ═══════════════════════════════════════════════════════════════════════════
+// 
+// ¿QUÉ HACE?
+// ----------
+// Permite al usuario elegir una voz específica para el TTS.
+// 
+// CÓMO USAR:
+// ----------
+// 1. Crear comando en Streamer.bot: !voz
+// 2. El usuario escribe: !voz homero Hola, soy Homero Simpson
+// 3. Nopolo reproduce el mensaje con la voz de Homero
+//
+// VOCES DISPONIBLES:
+// ------------------
+// • homero, dross, bugs, patolucas (o las que hayas configurado)
+// • random o aleatorio - Usa una voz aleatoria sin RVC (solo TTS)
+// • Si la voz no existe, se usa automáticamente una voz aleatoria sin RVC
+//
+// OVERLAY (Opcional):
+// -------------------
+// Puedes enviar el nombre del usuario que escribió el mensaje para que
+// aparezca en el overlay de OBS en lugar del nombre de la voz.
+// Para esto, agrega el campo "author" al JSON (ver línea 73).
+// Ejemplo: Si "postInCloud" escribe "!voz goku te amo", el overlay mostrará "postInCloud"
+//
+// CONFIGURACIÓN:
+// --------------
+// • Servidor Nopolo corriendo en: http://localhost:8000
+// • Iniciar con: ./run_nopolo_full.sh
+//
+// REFERENCIAS NECESARIAS:
+// -----------------------
+// System.dll, System.Net.Sockets.dll
+//
+// ═══════════════════════════════════════════════════════════════════════════
 
 using System;
 using System.Net.Sockets;
@@ -18,127 +48,149 @@ public class CPHInline
         {
             string text = "";
             string voiceId = "";
-            
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // PASO 1: Obtener el mensaje completo
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             // Obtener texto de cleanedText
             if (args.ContainsKey("cleanedText"))
             {
                 text = args["cleanedText"].ToString();
-            }
-            else if (args.ContainsKey("speakerMessage"))
+            }else
             {
-                text = args["speakerMessage"].ToString();
+                return false;
             }
-            
+
             // Validar que tenemos texto
             if (string.IsNullOrEmpty(text))
             {
                 CPH.LogWarn("[TTS Nopolo] No hay texto para leer");
                 return false;
             }
-            
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // PASO 2: Tomar el id de la voz
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             // Obtener voz de variable global voiceToUse
             voiceId = CPH.GetGlobalVar<string>("voiceToUse", false);
-            String[] array = voiceId.Split('-');
-            voiceId = array[1];
+
+
+            voiceId = voiceId.ToLower();
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // PASO 3: Preparar el mensaje para enviarlo
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            string textoSeguro = PrepararMensajeParaJSON(text);
+            string vozSegura = PrepararMensajeParaJSON(voiceId);
             
-            // Si voiceToUse está vacía, usar voz por defecto
-            if (string.IsNullOrEmpty(voiceId))
+            // Obtener nombre del usuario desde Streamer.bot
+            string usuario = "";
+            if (CPH.TryGetArg("userName", out string nombreUsuario))
             {
-                voiceId = "base_male"; // Voz por defecto de Nopolo
-                CPH.LogInfo("[TTS Nopolo] Usando voz por defecto: " + voiceId);
+                usuario = PrepararMensajeParaJSON(nombreUsuario);
             }
+            string json = "{\"text\":\"" + textoSeguro + "\",\"voice_id\":\"" + vozSegura + "\",\"author\":\"" + usuario + "\"}";
             
-            // Escapar JSON
-            string escapedMessage = EscapeJson(text);
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // PASO 4: Enviar al servidor de Nopolo
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            bool exito = EnviarANopolo(json);
             
-            // Crear JSON con voz específica
-            string jsonBody = "{\"text\":\"" + escapedMessage + "\",\"voice_id\":\"" + voiceId + "\"}";
-            
-            // Enviar request al servidor Nopolo
-            string response = SendHttpPost("127.0.0.1", 8000, "/api/tts", jsonBody);
-            
-            // Verificar respuesta
-            if (response.Contains("200 OK") || response.Contains("\"success\":true"))
+            if (exito)
             {
-                CPH.LogInfo("[TTS Nopolo] ✓ Voz: " + voiceId + " | Mensaje: " + text);
+                CPH.LogInfo("✅ [TTS Voz] Voz: " + voz + " | Texto: " + texto);
                 return true;
-            }
-            else if (response.Contains("404"))
-            {
-                CPH.LogWarn("[TTS Nopolo] Voz '" + voiceId + "' no encontrada. Usando voz por defecto.");
-                // Reintentar con voz por defecto sin voice_id
-                jsonBody = "{\"text\":\"" + escapedMessage + "\"}";
-                response = SendHttpPost("127.0.0.1", 8000, "/api/tts", jsonBody);
-                return response.Contains("200 OK");
             }
             else
             {
-                CPH.LogWarn("[TTS Nopolo] Error del servidor");
-                CPH.LogDebug("[TTS Nopolo] Respuesta: " + response.Substring(0, Math.Min(200, response.Length)));
+                CPH.LogWarn("⚠️ [TTS Voz] No se pudo enviar el mensaje");
                 return false;
             }
         }
-        catch (SocketException ex)
-        {
-            CPH.LogError("[TTS Nopolo] No se pudo conectar al servidor. ¿Está corriendo en http://localhost:8000?");
-            CPH.LogError("[TTS Nopolo] Error: " + ex.Message);
-            return false;
-        }
         catch (Exception ex)
         {
-            CPH.LogError("[TTS Nopolo] Error: " + ex.Message);
+            CPH.LogError("❌ [TTS Voz] Error: " + ex.Message);
             return false;
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FUNCIONES AUXILIARES (No es necesario modificar nada aquí)
+    // ═══════════════════════════════════════════════════════════════════════
     
-    private string EscapeJson(string text)
+    /// <summary>
+    /// Convierte el texto a un formato seguro para JSON
+    /// </summary>
+    private string PrepararMensajeParaJSON(string texto)
     {
-        // Escapar caracteres especiales JSON (Unicode se maneja automáticamente con UTF-8)
-        return text
+        return texto
             .Replace("\\", "\\\\")
             .Replace("\"", "\\\"")
             .Replace("\n", "\\n")
             .Replace("\r", "\\r")
-            .Replace("\t", "\\t")
-            .Replace("\b", "\\b")
-            .Replace("\f", "\\f");
+            .Replace("\t", "\\t");
     }
-    
-    private string SendHttpPost(string host, int port, string path, string jsonBody)
+
+    /// <summary>
+    /// Envía el mensaje al servidor de Nopolo
+    /// </summary>
+    private bool EnviarANopolo(string json)
     {
-        // IMPORTANTE: Calcular Content-Length en bytes UTF-8, no en caracteres
-        // Esto maneja correctamente tildes, emojis y caracteres de otros idiomas
-        byte[] bodyBytes = Encoding.UTF8.GetBytes(jsonBody);
-        int contentLength = bodyBytes.Length;
-        
-        // Headers en ASCII
-        string headers = 
-            "POST " + path + " HTTP/1.1\r\n" +
-            "Host: " + host + ":" + port + "\r\n" +
-            "Content-Type: application/json; charset=utf-8\r\n" +
-            "Content-Length: " + contentLength + "\r\n" +
-            "Connection: close\r\n" +
-            "\r\n";
-
-        using (TcpClient client = new TcpClient())
+        try
         {
-            client.SendTimeout = 5000;
-            client.ReceiveTimeout = 5000;
-            client.Connect(host, port);
-
-            NetworkStream stream = client.GetStream();
+            // Configuración del servidor
+            string servidor = "127.0.0.1";
+            int puerto = 8000;
+            string ruta = "/api/tts";
             
-            // Enviar headers (ASCII)
-            byte[] headerBytes = Encoding.ASCII.GetBytes(headers);
-            stream.Write(headerBytes, 0, headerBytes.Length);
+            // Convertir texto a bytes
+            byte[] jsonBytes = Encoding.UTF8.GetBytes(json);
             
-            // Enviar body (UTF-8)
-            stream.Write(bodyBytes, 0, bodyBytes.Length);
-            stream.Flush();
+            // Crear petición HTTP
+            string encabezados = 
+                "POST " + ruta + " HTTP/1.1\r\n" +
+                "Host: " + servidor + ":" + puerto + "\r\n" +
+                "Content-Type: application/json; charset=utf-8\r\n" +
+                "Content-Length: " + jsonBytes.Length + "\r\n" +
+                "Connection: close\r\n" +
+                "\r\n";
 
-            byte[] buffer = new byte[4096];
-            int bytesRead = stream.Read(buffer, 0, buffer.Length);
-            return Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            // Conectar y enviar
+            using (TcpClient cliente = new TcpClient())
+            {
+                cliente.SendTimeout = 5000;
+                cliente.ReceiveTimeout = 5000;
+                cliente.Connect(servidor, puerto);
+
+                NetworkStream stream = cliente.GetStream();
+                
+                // Enviar encabezados
+                byte[] encabezadosBytes = Encoding.ASCII.GetBytes(encabezados);
+                stream.Write(encabezadosBytes, 0, encabezadosBytes.Length);
+                
+                // Enviar mensaje
+                stream.Write(jsonBytes, 0, jsonBytes.Length);
+                stream.Flush();
+
+                // Leer respuesta
+                byte[] buffer = new byte[4096];
+                int bytesLeidos = stream.Read(buffer, 0, buffer.Length);
+                string respuesta = Encoding.UTF8.GetString(buffer, 0, bytesLeidos);
+                
+                // Verificar si fue exitoso
+                return respuesta.Contains("200 OK") || respuesta.Contains("\"success\":true");
+            }
+        }
+        catch (SocketException)
+        {
+            CPH.LogError("❌ [TTS Voz] No se pudo conectar a Nopolo.");
+            CPH.LogError("   → ¿Está corriendo en http://localhost:8000?");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            CPH.LogError("❌ [TTS Voz] Error: " + ex.Message);
+            return false;
         }
     }
 }

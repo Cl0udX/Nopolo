@@ -99,28 +99,52 @@ class GoogleTTSProvider(BaseTTSProvider):
         # Configurar input
         synthesis_input = texttospeech.SynthesisInput(text=text)
         
-        # Configurar voz
+        # Configurar voz (sin especificar género - deja que Google use el género natural de la voz)
         voice = texttospeech.VoiceSelectionParams(
             language_code=self.config.language_code,
-            name=self.config.voice_id,
-            ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+            name=self.config.voice_id
         )
         
-        # Configurar audio
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.LINEAR16,
-            sample_rate_hertz=self.config.sample_rate,
-            speaking_rate=self._parse_rate(self.config.rate),
-            pitch=self.config.pitch / 10.0,  # Google usa rango -20.0 a 20.0
-            volume_gain_db=self._parse_volume(self.config.volume)
-        )
-        
-        # Sintetizar
-        response = self.client.synthesize_speech(
-            input=synthesis_input,
-            voice=voice,
-            audio_config=audio_config
-        )
+        # Intentar primero con pitch
+        try:
+            # Configurar audio con pitch
+            audio_config = texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+                sample_rate_hertz=self.config.sample_rate,
+                speaking_rate=self._parse_rate(self.config.rate),
+                pitch=self.config.pitch / 10.0,  # Google usa rango -20.0 a 20.0
+                volume_gain_db=self._parse_volume(self.config.volume)
+            )
+            
+            # Sintetizar
+            response = self.client.synthesize_speech(
+                input=synthesis_input,
+                voice=voice,
+                audio_config=audio_config
+            )
+            
+        except Exception as e:
+            # Si el error es que la voz no soporta pitch, reintentar sin pitch
+            if "does not support pitch parameters" in str(e):
+                print(f"Voz {self.config.voice_id} no soporta modificación de pitch, usando valor por defecto")
+                
+                # Configurar audio SIN pitch
+                audio_config = texttospeech.AudioConfig(
+                    audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+                    sample_rate_hertz=self.config.sample_rate,
+                    speaking_rate=self._parse_rate(self.config.rate),
+                    volume_gain_db=self._parse_volume(self.config.volume)
+                )
+                
+                # Reintentar sin pitch
+                response = self.client.synthesize_speech(
+                    input=synthesis_input,
+                    voice=voice,
+                    audio_config=audio_config
+                )
+            else:
+                # Si es otro error, propagarlo
+                raise
         
         # Guardar a archivo temporal
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:

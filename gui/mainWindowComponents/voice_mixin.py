@@ -138,6 +138,64 @@ class VoiceMixin:
         # Recargar lista de voces en la GUI
         self._load_voices()
     
+    def _delete_voice(self):
+        """Elimina la voz seleccionada"""
+        from PySide6.QtWidgets import QMessageBox
+        
+        # Obtener voz actual
+        profile_id = self.voice_combo.currentData()
+        if not profile_id:
+            QMessageBox.warning(self, "Sin selección", "Selecciona una voz para eliminar")
+            return
+        
+        profile = self.voice_manager.get_profile(profile_id)
+        if not profile:
+            QMessageBox.warning(self, "Error", "No se pudo obtener información de la voz")
+            return
+        
+        # Confirmación
+        reply = QMessageBox.question(
+            self,
+            "Confirmar eliminación",
+            f"¿Estás seguro de eliminar la voz?\n\n"
+            f"Nombre: {profile.display_name}\n"
+            f"ID: {profile.profile_id}\n"
+            f"Tipo: {'Con RVC' if profile.is_transformer_voice() else 'Solo TTS'}\n\n"
+            f"Esta acción no se puede deshacer.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # Eliminar del voice manager (esto actualiza el JSON automáticamente)
+            if self.voice_manager.remove_profile(profile_id):
+                self.log_to_console(f"Voz eliminada: {profile.display_name}")
+                # Recargar lista
+                self._load_voices()
+            else:
+                QMessageBox.critical(self, "Error", f"No se pudo eliminar la voz {profile.display_name}")
+    
+    def _reload_voices(self):
+        """Recarga las voces desde el archivo JSON"""
+        from PySide6.QtWidgets import QMessageBox
+        
+        try:
+            # Recargar configuración desde archivo
+            self.voice_manager._load_config()
+            
+            # Recargar lista en la GUI
+            self._load_voices()
+            
+            self.log_to_console("Voces recargadas desde archivo")
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al recargar voces:\n{str(e)}"
+            )
+            self.log_to_console(f"Error recargando voces: {e}")
+    
     def _on_multivoice_toggled(self, checked):
         """Callback cuando se activa/desactiva el modo multi-voz."""
         if checked:
