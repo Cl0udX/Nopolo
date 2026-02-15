@@ -15,5 +15,5 @@ if [ -d ".venv" ]; then
     source .venv/bin/activate
 fi
 
-# Ejecutar solo GUI
+# Ejecutar GUI + API Server
 python3 main.py

@@ -16,4 +16,4 @@ if [ -d ".venv" ]; then
 fi
 
 # Ejecutar solo GUI
-python3 main.py
+python3 main.py --only-gui

@@ -62,15 +62,34 @@ Configuración en .env para personalizar rutas y puertos.
         """
     )
     
+    )
+    parser.add_argument(
+        "--with-api",
+        action="store_true",
+        help="GUI + API Server simultáneamente"
+    )
+    parser.add_argument(
+    parser = argparse.ArgumentParser(
+        description="Nopolo TTS - Text to Speech con RVC",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+            "--host", args.api_host,
+            "--port", str(args.api_port)
+        ]
+        run_api_main()
+    
+    elif run_mode == "gui_with_api":
+        print("Modo: GUI + API Server")
+    )
     parser.add_argument(
         "--no-gui",
         action="store_true",
         help="Solo API Server sin interfaz gráfica"
     )
     parser.add_argument(
-        "--with-api",
+        "--only-gui",
         action="store_true",
-        help="GUI + API Server simultáneamente"
+        help="Solo GUI sin API Server"
     )
     parser.add_argument(
         "--api-port",
@@ -83,36 +102,14 @@ Configuración en .env para personalizar rutas y puertos.
         default=os.getenv("API_HOST", "0.0.0.0"),
         help=f"Host del servidor API (default desde .env: {os.getenv('API_HOST', '0.0.0.0')})"
     )
-    
     args = parser.parse_args()
-    
     # Determinar modo de ejecución
     if args.no_gui:
         run_mode = "api_only"
-    elif args.with_api or get_env_bool("GUI_AUTO_START_API"):
-        run_mode = "gui_with_api"
-    else:
+    elif args.only_gui:
         run_mode = "gui_only"
-    
-    # Ejecutar según modo
-    print("=" * 70)
-    print("Nopolo TTS - Text to Speech con transformadores de voz RVC")
-    print("=" * 70)
-    
-    if run_mode == "api_only":
-        print("Modo: API Server (sin GUI)")
-        print(f"Host: {args.api_host}:{args.api_port}")
-        print("=" * 70)
-        from run_api import main as run_api_main
-        sys.argv = [
-            "run_api.py",
-            "--host", args.api_host,
-            "--port", str(args.api_port)
-        ]
-        run_api_main()
-    
-    elif run_mode == "gui_with_api":
-        print("Modo: GUI + API Server")
+    else:
+        run_mode = "gui_with_api"
         print(f"API Server: http://{args.api_host}:{args.api_port}")
         print(f"Documentación: http://localhost:{args.api_port}/docs")
         print("=" * 70)

@@ -1,6 +1,9 @@
 # Instalación de Fairseq (requerido por RVC)
 # ⚠️ IMPORTANTE: Ejecutar COMO ADMINISTRADOR en Windows
 
+# Si esta usando una .venv, asegúrate de activarla antes de instalar Fairseq
+# ./.venv/Scripts/activate
+
 # Windows (PowerShell como Administrador):
 # pip install git+https://github.com/Tps-F/fairseq.git@main
 

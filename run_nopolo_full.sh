@@ -20,4 +20,4 @@ echo "=================================================="
 echo "Nopolo - Modo Completo (GUI + API)"
 echo "Documentación API: http://localhost:8000/docs"
 echo "=================================================="
-python3 main.py --with-api
+python3 main.py
