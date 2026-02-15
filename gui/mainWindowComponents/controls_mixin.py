@@ -10,13 +10,13 @@ class ControlsMixin:
     def _stop_audio(self):
         """Detiene todo el audio que está sonando"""
         self.audio_queue.stop_current()
-        print("Audio detenido")
+        self.log_to_console("Audio detenido")
     
     def _skip_audio(self):
         """Salta al siguiente en la cola"""
         self.audio_queue.skip_to_next()
         queue_size = self.audio_queue.get_queue_size()
-        print(f"Saltando al siguiente (quedan {queue_size} en cola)")
+        self.log_to_console(f"Saltando al siguiente (quedan {queue_size} en cola)")
         
         self.input.clear()
     

@@ -366,7 +366,6 @@ class VoiceConfigDialog(QDialog):
     def _on_rvc_toggle(self, state):
         """Habilita/deshabilita configuración RVC"""
         self.rvc_config_widget.setEnabled(self.use_rvc_checkbox.isChecked())
-        print(f"RVC habilitado: {self.use_rvc_checkbox.isChecked()}")
     
     def _browse_model(self):
         """Abre diálogo para seleccionar archivo .pth"""
@@ -390,13 +389,11 @@ class VoiceConfigDialog(QDialog):
                 if file.endswith('.index'):
                     index_path = os.path.join(model_dir, file)
                     self.index_path_input.setText(index_path)
-                    print(f"Index auto-detectado: {file}")
                     index_found = True
                     break
             
             if not index_found:
                 self.index_path_input.clear()
-                print("No se encontró archivo .index (opcional)")
     
     def _browse_index(self):
         """Abre diálogo para seleccionar archivo .index"""
@@ -409,7 +406,6 @@ class VoiceConfigDialog(QDialog):
         
         if file_path:
             self.index_path_input.setText(file_path)
-            print(f"Index seleccionado: {os.path.basename(file_path)}")
     
     def _load_profile_data(self):
         """Carga datos del perfil en modo editar"""
@@ -455,17 +451,26 @@ class VoiceConfigDialog(QDialog):
             # Google TTS usa rate/volume como strings ("+0%", "+50%", etc.)
             # Convertir rate string a speed float
             rate_str = getattr(tts, 'rate', '+0%')
-            speed_percent = int(rate_str.replace('%', '').replace('+', ''))
-            speed = 1.0 + (speed_percent / 100.0)
+            # Manejar tanto strings como floats
+            if isinstance(rate_str, str):
+                speed_percent = int(rate_str.replace('%', '').replace('+', ''))
+                speed = 1.0 + (speed_percent / 100.0)
+            else:
+                speed = float(rate_str)
             self.speed_slider.setValue(int(speed * 100))
             
             # Pitch
             self.pitch_spinbox.setValue(getattr(tts, 'pitch', 0))
             
             # Convertir volume string a float
-            volume_str = getattr(tts, 'volume', '+0%')
-            volume_percent = int(volume_str.replace('%', '').replace('+', ''))
-            volume = 1.0 + (volume_percent / 100.0)
+            # Intentar volume_str primero, luego volume
+            volume_str = getattr(tts, 'volume_str', None) or getattr(tts, 'volume', '+0%')
+            # Manejar tanto strings como floats
+            if isinstance(volume_str, str):
+                volume_percent = int(volume_str.replace('%', '').replace('+', ''))
+                volume = 1.0 + (volume_percent / 100.0)
+            else:
+                volume = float(volume_str)
             self.volume_slider.setValue(int(volume * 100))
         else:
             # Edge TTS y otros usan speed/pitch/volume como números
@@ -542,7 +547,6 @@ class VoiceConfigDialog(QDialog):
                 self.temp_tts_engine.update_config(tts_config)
             
             # Sintetizar
-            print("Probando TTS...")
             wav_path = self.temp_tts_engine.synthesize(text)
             
             # Reproducir
@@ -577,7 +581,6 @@ class VoiceConfigDialog(QDialog):
             else:
                 self.temp_tts_engine.update_config(tts_config)
             
-            print("Generando TTS...")
             wav_path = self.temp_tts_engine.synthesize(text)
             
             # RVC
@@ -592,7 +595,6 @@ class VoiceConfigDialog(QDialog):
             
             self.temp_rvc_engine.load_model(rvc_config)
             
-            print("Aplicando RVC...")
             converted_audio = self.temp_rvc_engine.convert(wav_path, rvc_config)
             
             # Reproducir
@@ -714,8 +716,8 @@ class VoiceConfigDialog(QDialog):
             print(f"Error cargando voces de {engine_type}: {e}")
             self.voice_combo.addItem("Error cargando voces", None)
     
-    def _build_tts_config(self) -> EdgeTTSConfig:
-        """Construye EdgeTTSConfig desde la UI"""
+    def _build_tts_config(self):
+        """Construye la configuración TTS adecuada según el proveedor"""
         voice_id = self.voice_combo.currentData()
         provider_name = self.engine_combo.currentData()
         
@@ -726,11 +728,39 @@ class VoiceConfigDialog(QDialog):
                     voice_id = self.voice_combo.itemData(i)
                     break
         
-        return EdgeTTSConfig(
-            provider_name=provider_name,
-            voice_id=voice_id or "es-MX-JorgeNeural",
-            speed=self.speed_slider.value() / 100.0,
-            pitch=self.pitch_spinbox.value(),
-            volume=self.volume_slider.value() / 100.0
-        )
+        # Crear config según el proveedor
+        if provider_name == 'google_tts':
+            from core.tts.google_provider import GoogleTTSConfig
+            # Convertir slider values a formato de Google TTS
+            speed_value = self.speed_slider.value() / 100.0
+            speed_percent = int((speed_value - 1.0) * 100)
+            rate_str = f"{speed_percent:+d}%"
+            
+            volume_value = self.volume_slider.value() / 100.0
+            volume_percent = int((volume_value - 1.0) * 100)
+            volume_str = f"{volume_percent:+d}%"
+            
+            # Extraer language_code de voice_id si es posible
+            # voice_id formato: "es-US-Wavenet-B" -> language_code: "es-US"
+            parts = voice_id.split('-')
+            language_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else "es-US"
+            
+            return GoogleTTSConfig(
+                voice_id=voice_id or "es-US-Standard-C",
+                language_code=language_code,
+                rate=rate_str,
+                volume=volume_str,
+                pitch=self.pitch_spinbox.value(),
+                sample_rate=44100,
+                credentials_path=None
+            )
+        else:
+            # Edge TTS y otros proveedores
+            return EdgeTTSConfig(
+                provider_name=provider_name,
+                voice_id=voice_id or "es-MX-JorgeNeural",
+                speed=self.speed_slider.value() / 100.0,
+                pitch=self.pitch_spinbox.value(),
+                volume=self.volume_slider.value() / 100.0
+            )
     

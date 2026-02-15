@@ -220,7 +220,7 @@ class RVCEngine:
             
             # Verificar si necesitamos reiniciar el motor RVC
             if self.conversion_count >= self.max_conversions_before_restart:
-                print(f"⚠️ {self.conversion_count} conversiones completadas - Reiniciando motor RVC para prevenir memory leaks...")
+                print(f"{self.conversion_count} conversiones completadas - Reiniciando motor RVC para prevenir memory leaks...")
                 self._restart_engine()
             
             # Retornar como tupla (wav_data, rate)
@@ -338,10 +338,10 @@ class RVCEngine:
             # Resetear contador
             self.conversion_count = 0
             
-            print("✅ Motor RVC reiniciado exitosamente")
+            print("Motor RVC reiniciado exitosamente")
             
         except Exception as e:
-            print(f"⚠️ Error reiniciando motor RVC: {e}")
+            print(f"Error reiniciando motor RVC: {e}")
             # Intentar al menos resetear el contador
             self.conversion_count = 0
             print(f"Error limpiando memoria (no crítico): {e}")

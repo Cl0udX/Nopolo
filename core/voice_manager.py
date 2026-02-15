@@ -75,7 +75,7 @@ class VoiceManager:
             
             return True
         except Exception as e:
-            print(f"❌ Error agregando perfil {profile.profile_id}: {e}")
+            print(f"Error agregando perfil {profile.profile_id}: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -183,12 +183,12 @@ class VoiceManager:
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             
-            print(f"✅ Configuración guardada en {self.config_path} ({len(self.profiles)} voces)")
+            print(f"Configuración guardada en {self.config_path} ({len(self.profiles)} voces)")
             
         except PermissionError as e:
-            print(f"❌ Error de permisos al guardar {self.config_path}: {e}")
+            print(f"Error de permisos al guardar {self.config_path}: {e}")
         except Exception as e:
-            print(f"❌ Error guardando configuración en {self.config_path}: {e}")
+            print(f"Error guardando configuración en {self.config_path}: {e}")
             import traceback
             traceback.print_exc()
     
@@ -283,14 +283,14 @@ class VoiceManager:
             )
             
             if self.add_profile(profile):
-                print(f"✅ Modelo auto-agregado: {model_name} (ID: {profile_id})")
+                print(f"Modelo auto-agregado: {model_name} (ID: {profile_id})")
                 return profile_id
             else:
-                print(f"❌ Error al agregar perfil {model_name}")
+                print(f"Error al agregar perfil {model_name}")
                 return None
                 
         except Exception as e:
-            print(f"❌ Error en auto_add_rvc_model para {model_path}: {e}")
+            print(f"Error en auto_add_rvc_model para {model_path}: {e}")
             import traceback
             traceback.print_exc()
             return None

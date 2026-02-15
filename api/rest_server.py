@@ -16,6 +16,7 @@ from core.audio_queue import AudioQueue
 from core.tts_engine import TTSEngine
 from core.rvc_engine import RVCEngine
 from core.advanced_processor import AdvancedAudioProcessor
+from core.overlay_manager import get_overlay_manager
 
 
 # ==================== Modelos Pydantic ====================
@@ -25,13 +26,15 @@ class TTSRequest(BaseModel):
     text: str = Field(..., description="Texto a sintetizar", min_length=1, max_length=5000)
     voice_id: Optional[str] = Field(None, description="ID del perfil de voz (usa default si no se especifica)")
     priority: Optional[int] = Field(0, description="Prioridad en la cola (mayor = más prioritario)")
+    author: Optional[str] = Field(None, description="Nombre del usuario que envió el mensaje (se muestra en overlay)")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "text": "Hola, soy Goku y estoy listo para pelear",
-                "voice_id": "goku_mx",
-                "priority": 0
+                "text": "texto",
+                "voice_id": "voice",
+                "priority": 0,
+                "author": "user"
             }
         }
 
@@ -43,7 +46,7 @@ class AdvancedTTSRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "message": "dross: hola amigos (disparo) homero: doh! reportero.fa: estamos en vivo"
+                "message": "goku: hola amigos (disparo) homero: doh! reportero.fa: estamos en vivo"
             }
         }
 
@@ -164,42 +167,46 @@ class TTSAPIServer:
             
             while True:
                 try:
-                    # Obtener siguiente item de la cola
-                    text = self.multivoice_queue.get()
+                    # Obtener siguiente item de la cola (texto y autor opcional)
+                    text, author = self.multivoice_queue.get()
                     
-                    print(f"[Worker] Procesando: {text[:50]}...")
+                    print(f"[Worker Multi-Voz] Procesando desde endpoint: {text[:50]}...")
                     
                     # Procesar mensaje (puede tardar varios segundos con TTS + RVC)
                     audio_data, sample_rate = self.advanced_processor.process_message(text)
                     
                     # Enviar evento al overlay JUSTO ANTES de reproducir (cuando el audio está listo)
-                    if self.main_window and hasattr(self.main_window, '_send_overlay_event'):
-                        self.main_window._send_overlay_event(text, "Multi-Voz", is_nopolo=True)
+                    # Si viene author, usarlo en lugar de "Multi-Voz"
+                    display_name = author if author else "Multi-Voz (API)"
+                    print(f"[Worker Multi-Voz] Enviando evento overlay con is_nopolo=True, display=\"{display_name}\"")
+                    
+                    # Usar overlay manager centralizado
+                    overlay_mgr = get_overlay_manager()
+                    overlay_mgr.show(text, display_name, is_nopolo=True)
                     
                     # Reproducir (esto bloquea hasta que termine el audio)
                     play_wav((audio_data, sample_rate))
                     
                     # Limpiar overlay cuando termina
-                    if self.main_window and hasattr(self.main_window, '_clear_overlay'):
-                        self.main_window._clear_overlay()
+                    overlay_mgr.hide()
                     
                     # Limpiar memoria AGRESIVAMENTE después de cada procesamiento
                     del audio_data
                     gc.collect()
                     
-                    print(f"[Worker] ✅ Completado exitosamente")
+                    print(f"[Worker]Completado exitosamente")
                     
                 except MemoryError as e:
-                    print(f"⚠️ [Worker] Error de memoria en multi-voz: {e}")
-                    if self.main_window and hasattr(self.main_window, '_clear_overlay'):
-                        self.main_window._clear_overlay()
+                    print(f"[Worker] Error de memoria en multi-voz: {e}")
+                    overlay_mgr = get_overlay_manager()
+                    overlay_mgr.hide()
                     # Limpieza agresiva
                     gc.collect()
                     
                 except RuntimeError as e:
-                    print(f"⚠️ [Worker] Error de runtime (GPU/CUDA): {e}")
-                    if self.main_window and hasattr(self.main_window, '_clear_overlay'):
-                        self.main_window._clear_overlay()
+                    print(f"[Worker] Error de runtime (GPU/CUDA): {e}")
+                    overlay_mgr = get_overlay_manager()
+                    overlay_mgr.hide()
                     # Limpieza agresiva
                     gc.collect()
                     
@@ -207,8 +214,8 @@ class TTSAPIServer:
                     import traceback
                     print(f"⚠️ [Worker] Error en worker multi-voz: {e}")
                     traceback.print_exc()
-                    if self.main_window and hasattr(self.main_window, '_clear_overlay'):
-                        self.main_window._clear_overlay()
+                    overlay_mgr = get_overlay_manager()
+                    overlay_mgr.hide()
                     # Limpieza agresiva
                     gc.collect()
                     
@@ -255,6 +262,7 @@ class TTSAPIServer:
             - **text**: Texto a sintetizar (requerido)
             - **voice_id**: ID del perfil de voz (opcional, usa default)
             - **priority**: Prioridad en cola (opcional, default=0)
+            - **author**: Nombre del usuario que envió el mensaje (opcional, se muestra en overlay)
             
             Si la voz no existe o se especifica "random"/"aleatorio", 
             se usa una voz aleatoria sin RVC (solo TTS).
@@ -300,7 +308,9 @@ class TTSAPIServer:
                         )
                 
                 # Agregar a la cola
-                self.audio_queue.add(request.text, profile)
+                # Usar author si está disponible, sino el nombre de la voz
+                voice_name = profile.display_name
+                self.audio_queue.add(request.text, profile, voice_name, self.main_window, request.author)
                 queue_pos = self.audio_queue.queue.qsize()
                 
                 return TTSResponse(
@@ -325,12 +335,14 @@ class TTSAPIServer:
             - **Sonidos**: `(nombre)` o `(id)`
             - **Filtros**: `nombre.filtro: texto` (r, p, pu, pd, m, a, l)
             - **Fondos**: `nombre.fondo: texto` (fa, fb, fc, fd, fe)
+            - **author**: Nombre del usuario que envió el mensaje (opcional, se muestra en overlay)
             
             Ejemplo: `"dross: hola (disparo) homero: doh! reportero.fa: en vivo"`
             """
             try:
                 # Agregar a la cola dedicada de multi-voz (procesamiento secuencial)
-                self.multivoice_queue.put(request.text)
+                # Guardar texto y autor (opcional)
+                self.multivoice_queue.put((request.text, request.author))
                 queue_pos = self.multivoice_queue.qsize()
                 
                 return TTSResponse(

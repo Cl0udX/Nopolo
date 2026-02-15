@@ -89,6 +89,9 @@ class MainWindow(
         # Iniciar verificación de conexión a internet (definido en SystemConfigMixin)
         self._check_internet_connection()
         
+        # Cargar configuración de dispositivo de audio (definido en SystemConfigMixin)
+        self._load_audio_device_config()
+        
         # Timer para verificar conexión periódicamente (cada 30 segundos)
         self.connection_timer = QTimer()
         self.connection_timer.timeout.connect(self._check_internet_connection)

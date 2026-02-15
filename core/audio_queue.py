@@ -5,6 +5,7 @@ from .tts_engine import TTSEngine
 from .rvc_engine import RVCEngine
 from .audio_player import play_wav, stop_audio
 from .models import VoiceProfile
+from .overlay_manager import get_overlay_manager
 
 
 class AudioQueue:
@@ -20,7 +21,7 @@ class AudioQueue:
         self.worker_thread.start()
         print("Cola de audio iniciada")
     
-    def add(self, text: str, voice_profile: Optional[VoiceProfile] = None, voice_name: str = "", main_window=None):
+    def add(self, text: str, voice_profile: Optional[VoiceProfile] = None, voice_name: str = "", main_window=None, author: str = None):
         """
         Agrega texto a la cola para procesamiento.
         
@@ -29,8 +30,9 @@ class AudioQueue:
             voice_profile: Perfil de voz a usar (opcional)
             voice_name: Nombre de la voz para el overlay
             main_window: Referencia a la ventana principal para enviar eventos overlay
+            author: Nombre del usuario que envió el mensaje (opcional, se muestra en overlay)
         """
-        self.queue.put((text, voice_profile, voice_name, main_window))
+        self.queue.put((text, voice_profile, voice_name, main_window, author))
     
     def stop_current(self):
         """Detiene el audio que está sonando actualmente"""
@@ -59,12 +61,17 @@ class AudioQueue:
     def _worker(self):
         """Worker thread que procesa la cola"""
         while True:
-            text, voice_profile, voice_name, main_window = self.queue.get()
+            text, voice_profile, voice_name, main_window, author = self.queue.get()
             
             try:
                 # Enviar evento de inicio al overlay (modo normal = is_nopolo False)
-                if main_window and hasattr(main_window, '_send_overlay_event'):
-                    main_window._send_overlay_event(text, voice_name, is_nopolo=False)
+                # Si viene author, usarlo en lugar del nombre de voz
+                display_name = author if author else voice_name
+                print(f"[Audio Queue] Procesando modo normal con voz: {display_name}")
+                
+                # Usar overlay manager centralizado
+                overlay_mgr = get_overlay_manager()
+                overlay_mgr.show(text, display_name, is_nopolo=False)
                 
                 # Paso 1: TTS (voz neutral)
                 if voice_profile and voice_profile.tts_config:
@@ -92,9 +99,9 @@ class AudioQueue:
                 # Paso 3: Reproducir
                 play_wav(converted_wav)
                 
-                # Enviar evento de fin al overlay
-                if main_window and hasattr(main_window, '_clear_overlay'):
-                    main_window._clear_overlay()
+                # Limpiar overlay al terminar
+                overlay_mgr = get_overlay_manager()
+                overlay_mgr.hide()
                 
             except Exception as e:
                 print(f"Error en cola de audio: {e}")

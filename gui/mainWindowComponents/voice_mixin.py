@@ -35,7 +35,7 @@ class VoiceMixin:
                 if index >= 0:
                     self.voice_combo.setCurrentIndex(index)
         
-        print(f"{len(profiles)} voces cargadas")
+        self.log_to_console(f"{len(profiles)} voces cargadas")
     
     def _on_voice_changed(self, index):
         """Callback cuando cambia la voz seleccionada"""
@@ -74,7 +74,7 @@ class VoiceMixin:
                     self.rvc_engine.config.model_id != profile.rvc_config.model_id):
                     self.rvc_engine.load_model(profile.rvc_config)
             except Exception as e:
-                print(f"Error cargando modelo RVC: {e}")
+                self.log_to_console(f"Error cargando modelo RVC: {e}")
     
     def _add_voice(self):
         """Abre diálogo para agregar nueva voz"""
@@ -86,7 +86,7 @@ class VoiceMixin:
         
         if dialog.exec():
             # Voz agregada exitosamente
-            print(f"Voz agregada: {dialog.get_profile().display_name}")
+            self.log_to_console(f"Voz agregada: {dialog.get_profile().display_name}")
             self._load_voices()
             
             # Seleccionar la nueva voz
@@ -113,37 +113,30 @@ class VoiceMixin:
         
         if dialog.exec():
             # Voz editada exitosamente
-            print(f"Voz actualizada: {dialog.get_profile().display_name}")
+            self.log_to_console(f"Voz actualizada: {dialog.get_profile().display_name}")
             self._load_voices()
     
     def _scan_models(self):
         """Escanea y agrega automáticamente nuevos modelos"""
-        print("\n🔍 Iniciando escaneo de modelos...")
         new_models = self.voice_manager.scan_rvc_models()
         
         if not new_models:
-            print("✓ No se encontraron modelos nuevos")
+            self.log_to_console("No se encontraron modelos nuevos")
             return
         
-        print(f"🎙️ {len(new_models)} modelos nuevos encontrados:")
+        self.log_to_console(f"{len(new_models)} modelos nuevos encontrados")
         
         added_count = 0
         for model_path in new_models:
             folder_name = os.path.basename(os.path.dirname(model_path))
-            print(f"   → Agregando: {folder_name}")
             profile_id = self.voice_manager.auto_add_rvc_model(model_path, gender="male")
             if profile_id:
-                print(f"      ✅ Perfil creado con ID: {profile_id}")
                 added_count += 1
-            else:
-                print(f"      ❌ Error al crear perfil")
         
-        print(f"\n✅ Se agregaron {added_count}/{len(new_models)} modelos")
-        print(f"📁 Guardado en: {self.voice_manager.config_path}")
+        self.log_to_console(f"Se agregaron {added_count}/{len(new_models)} modelos")
         
         # Recargar lista de voces en la GUI
         self._load_voices()
-        print("🔄 GUI actualizada\n")
     
     def _on_multivoice_toggled(self, checked):
         """Callback cuando se activa/desactiva el modo multi-voz."""

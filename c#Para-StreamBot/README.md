@@ -69,6 +69,40 @@ Scripts C# para integrar Nopolo TTS con Streamer.bot
 - **Función:** Muestra cuántos mensajes hay en cola
 - **Nivel:** Básico
 
+## 🎨 Campo Opcional: `author`
+
+Todos los scripts pueden enviar el campo `author` para personalizar lo que se muestra en el overlay de OBS.
+
+### ¿Qué hace?
+- Si envías `"author": "postInCloud"`, el overlay mostrará **"postInCloud"**
+- Si NO envías `author`, el overlay muestra el nombre de la voz (comportamiento por defecto)
+
+### ¿Cómo activarlo en otros scripts?
+
+**En TTS_ConVoz.cs:**
+Descomenta las líneas indicadas en el script para agregar el nombre del usuario:
+```csharp
+string usuario = "";
+if (CPH.TryGetArg("userName", out string nombreUsuario))
+{
+    usuario = PrepararMensajeParaJSON(nombreUsuario);
+}
+string json = "{\"text\":\"" + textoSeguro + "\",\"voice_id\":\"" + vozSegura + "\",\"author\":\"" + usuario + "\"}";
+```
+
+**En TTS_NopoloMultiVoz.cs:**
+Descomenta las líneas indicadas en el script para agregar el nombre del usuario:
+```csharp
+string usuario = "";
+if (CPH.TryGetArg("userName", out string nombreUsuario))
+{
+    usuario = EscaparJSON(nombreUsuario);
+}
+string json = "{\"text\":\"" + textoEscapado + "\",\"author\":\"" + usuario + "\"}";
+```
+
+**O simplemente usa TTS_ConAutor.cs** que ya tiene esta funcionalidad activada.
+
 ## 📝 Instalación en Streamer.bot
 
 ### Para principiantes (Recomendado):

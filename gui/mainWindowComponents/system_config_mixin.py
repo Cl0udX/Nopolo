@@ -4,6 +4,8 @@ Contiene métodos para verificar conexión a internet y configurar dispositivos 
 """
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QMessageBox
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
+from core.app_config import get_app_config
 
 
 class SystemConfigMixin:
@@ -27,6 +29,10 @@ class SystemConfigMixin:
         try:
             import sounddevice as sd
             
+            # Obtener configuración guardada
+            app_config = get_app_config()
+            saved_device = app_config.get_audio_device()
+            
             # Obtener lista de dispositivos
             devices = sd.query_devices()
             output_devices = []
@@ -35,15 +41,29 @@ class SystemConfigMixin:
                 if device['max_output_channels'] > 0:
                     output_devices.append((i, device['name']))
             
-            # Obtener dispositivo actual
+            # Obtener dispositivo actual en uso
             current_device = sd.default.device[1]  # [input, output]
             
             # Crear diálogo
             dialog = QDialog(self)
             dialog.setWindowTitle("Configuración de Dispositivo de Audio")
-            dialog.resize(500, 300)
+            dialog.resize(550, 350)
             
             layout = QVBoxLayout()
+            
+            # Mostrar dispositivo configurado
+            if saved_device is None:
+                config_text = "Dispositivo configurado: <b>Predeterminado del Sistema</b>"
+            else:
+                try:
+                    device_name = devices[saved_device]['name']
+                    config_text = f"Dispositivo configurado: <b>{device_name}</b>"
+                except:
+                    config_text = "Dispositivo configurado: <b>Desconocido (verificar)</b>"
+            
+            config_label = QLabel(config_text)
+            config_label.setStyleSheet("padding: 10px; background-color: #e3f2fd; border-radius: 5px; margin-bottom: 10px; color: #000;")
+            layout.addWidget(config_label)
             
             # Información
             info_label = QLabel("Selecciona el dispositivo de salida de audio:")
@@ -53,31 +73,42 @@ class SystemConfigMixin:
             device_list = QListWidget()
             
             for idx, name in output_devices:
-                item = QListWidgetItem(f"{name}")
+                # Marcar con emoji si es el dispositivo guardado
+                display_text = name
+                if idx == saved_device:
+                    display_text = f"✓ {name} (Configurado)"
+                elif idx == current_device and saved_device is None:
+                    display_text = f"⭐ {name} (Sistema)"
+                
+                item = QListWidgetItem(display_text)
                 item.setData(Qt.UserRole, idx)
                 device_list.addItem(item)
                 
-                # Seleccionar el dispositivo actual
-                if idx == current_device:
+                # Seleccionar el dispositivo configurado o el actual
+                if idx == (saved_device if saved_device is not None else current_device):
                     device_list.setCurrentItem(item)
+                    # Hacer el texto en bold
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
             
             layout.addWidget(device_list)
             
             # Botones
             button_layout = QHBoxLayout()
             
-            default_btn = QPushButton("Usar Predeterminado del Sistema")
+            default_btn = QPushButton("🔄 Usar Predeterminado del Sistema")
             default_btn.clicked.connect(lambda: self._set_audio_device(None, dialog))
             button_layout.addWidget(default_btn)
             
-            apply_btn = QPushButton("Aplicar")
+            apply_btn = QPushButton("✅ Aplicar")
             apply_btn.clicked.connect(lambda: self._set_audio_device(
                 device_list.currentItem().data(Qt.UserRole) if device_list.currentItem() else None,
                 dialog
             ))
             button_layout.addWidget(apply_btn)
             
-            cancel_btn = QPushButton("Cancelar")
+            cancel_btn = QPushButton("❌ Cancelar")
             cancel_btn.clicked.connect(dialog.reject)
             button_layout.addWidget(cancel_btn)
             
@@ -96,17 +127,23 @@ class SystemConfigMixin:
         """Establece el dispositivo de audio"""
         try:
             import sounddevice as sd
+            from core.app_config import get_app_config
             
+            # Guardar configuración
+            app_config = get_app_config()
+            app_config.set_audio_device(device_id)
+            
+            # Aplicar cambio inmediatamente
             if device_id is None:
                 # Usar predeterminado del sistema
                 sd.default.device = sd.default.device[0], None  # [input, default output]
-                self.log_to_console("Dispositivo de audio: Predeterminado del sistema")
+                self.log_to_console("✅ Dispositivo de audio: Predeterminado del sistema")
             else:
                 # Usar dispositivo específico
                 sd.default.device = sd.default.device[0], device_id
                 devices = sd.query_devices()
                 device_name = devices[device_id]['name']
-                self.log_to_console(f"Dispositivo de audio: {device_name}")
+                self.log_to_console(f"✅ Dispositivo de audio: {device_name}")
             
             dialog.accept()
             
@@ -116,3 +153,28 @@ class SystemConfigMixin:
                 "Error",
                 f"Error al cambiar dispositivo de audio:\n{str(e)}"
             )
+    
+    def _load_audio_device_config(self):
+        """Carga la configuración del dispositivo de audio al iniciar"""
+        try:
+            import sounddevice as sd
+            from core.app_config import get_app_config
+            
+            app_config = get_app_config()
+            device_id = app_config.get_audio_device()
+            
+            if device_id is None:
+                self.log_to_console("🔊 Dispositivo de audio: Predeterminado del sistema")
+            else:
+                try:
+                    devices = sd.query_devices()
+                    device_name = devices[device_id]['name']
+                    sd.default.device = sd.default.device[0], device_id
+                    self.log_to_console(f"🔊 Dispositivo de audio: {device_name}")
+                except Exception as e:
+                    self.log_to_console(f"⚠️ Error cargando dispositivo de audio configurado: {e}")
+                    self.log_to_console("🔊 Usando dispositivo predeterminado del sistema")
+                    
+        except Exception as e:
+            self.log_to_console(f"Error cargando configuración de audio: {e}")
+

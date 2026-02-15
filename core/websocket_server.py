@@ -61,7 +61,7 @@ class WebSocketServer:
     
     async def websocket_handler(self, request):
         """Maneja las conexiones WebSocket"""
-        ws = web.WebSocketResponse()
+        ws = web.WebSocketResponse(heartbeat=30)  # Ping cada 30 segundos
         await ws.prepare(request)
         
         self.clients.add(ws)
@@ -69,22 +69,40 @@ class WebSocketServer:
         
         # Enviar estado actual si está hablando
         if self.is_speaking:
-            await ws.send_json({
-                'type': 'tts_start',
-                'text': self.current_text,
-                'voice': self.current_voice
-            })
+            try:
+                await ws.send_json({
+                    'type': 'tts_start',
+                    'text': self.current_text,
+                    'voice': self.current_voice
+                })
+            except Exception as e:
+                logger.error(f"Error enviando estado inicial: {e}")
         
         try:
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
-                    # Procesar mensajes del cliente si es necesario
-                    pass
+                    # Procesar mensajes del cliente
+                    try:
+                        data = json.loads(msg.data)
+                        if data.get('type') == 'ping':
+                            # Responder al ping del cliente
+                            await ws.send_json({'type': 'pong'})
+                    except json.JSONDecodeError:
+                        pass  # Ignorar mensajes mal formados
                 elif msg.type == aiohttp.WSMsgType.ERROR:
                     logger.error(f'WebSocket error: {ws.exception()}')
+                    break
+                elif msg.type == aiohttp.WSMsgType.CLOSE:
+                    break
+        except Exception as e:
+            logger.error(f"Error en WebSocket handler: {e}")
         finally:
             self.clients.discard(ws)
             logger.info(f"🔌 Cliente desconectado. Total: {len(self.clients)}")
+            try:
+                await ws.close()
+            except:
+                pass
         
         return ws
     
@@ -126,6 +144,7 @@ class WebSocketServer:
         self.current_voice = ""
         
         message = {'type': 'tts_stop'}
+        
         await self._broadcast(message)
     
     async def _broadcast(self, message: dict):
@@ -135,15 +154,20 @@ class WebSocketServer:
         
         disconnected = set()
         
-        for ws in self.clients:
+        for ws in list(self.clients):  # Copiar lista para evitar modificación durante iteración
             try:
-                await ws.send_json(message)
+                if ws.closed:
+                    disconnected.add(ws)
+                else:
+                    await ws.send_json(message)
             except Exception as e:
                 logger.error(f"Error enviando mensaje a cliente: {e}")
                 disconnected.add(ws)
         
         # Limpiar clientes desconectados
-        self.clients -= disconnected
+        if disconnected:
+            self.clients -= disconnected
+            logger.info(f"🧹 Limpiados {len(disconnected)} clientes desconectados. Total activos: {len(self.clients)}")
 
 
 # Instancia global

@@ -34,6 +34,13 @@
 // a  = Robot
 // l  = Saturada/distorsionada
 //
+// OVERLAY (Opcional):
+// -------------------
+// Puedes enviar el nombre del usuario que escribió el mensaje para que
+// aparezca en el overlay de OBS en lugar de "Multi-Voz (modo Nopolo)".
+// Para activarlo, modifica la línea 128 para incluir el campo "author".
+// Ejemplo: Si "postInCloud" escribe un mensaje multi-voz, el overlay mostrará "postInCloud"
+//
 // CONFIGURACIÓN:
 // --------------
 // 1. Servidor Nopolo debe estar corriendo en http://localhost:8000
@@ -128,6 +135,17 @@ public class CPHInline
             
             // Crear JSON con el texto
             string textoEscapado = EscaparJSON(texto);
+            
+            // OPCIONAL: Obtener nombre del usuario desde Streamer.bot
+            // Descomenta las siguientes líneas si quieres mostrar el nombre del usuario en el overlay:
+            // string usuario = "";
+            // if (CPH.TryGetArg("userName", out string nombreUsuario))
+            // {
+            //     usuario = EscaparJSON(nombreUsuario);
+            // }
+            // string json = "{\"text\":\"" + textoEscapado + "\",\"author\":\"" + usuario + "\"}";
+            
+            // JSON sin author (comportamiento por defecto - muestra "Multi-Voz" en overlay)
             string json = "{\"text\":\"" + textoEscapado + "\"}";
             
             // Enviar petición HTTP

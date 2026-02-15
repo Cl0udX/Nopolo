@@ -3,11 +3,12 @@ Mixin para gestión del Overlay de OBS (WebSocket Server)
 """
 
 from PySide6.QtWidgets import (QGroupBox, QVBoxLayout, QHBoxLayout, 
-                               QPushButton, QLabel, QLineEdit,
+                               QPushButton, QPushButton, QLabel, QLineEdit,
                                QCheckBox, QMessageBox, QApplication)
 from PySide6.QtCore import Qt
 import asyncio
 import threading
+from core.overlay_manager import get_overlay_manager
 
 
 class OverlayMixin:
@@ -96,6 +97,9 @@ class OverlayMixin:
     def _on_overlay_mode_changed(self):
         self.show_normal_mode = self.overlay_normal_check.isChecked()
         self.show_nopolo_mode = self.overlay_nopolo_check.isChecked()
+        # Actualizar filtros en el manager
+        overlay_mgr = get_overlay_manager()
+        overlay_mgr.set_filters(self.show_nopolo_mode, self.show_normal_mode)
         if self.overlay_server_running:
             self._update_overlay_url()
     
@@ -113,16 +117,28 @@ class OverlayMixin:
     def _start_overlay_server(self):
         try:
             from core.websocket_server import get_websocket_server
+            from core.overlay_manager import get_overlay_manager
+            import time
             
             def run_server():
                 self.overlay_event_loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(self.overlay_event_loop)
                 self.ws_server = get_websocket_server()
                 self.overlay_event_loop.run_until_complete(self.ws_server.start())
+                
+                # Configurar overlay manager DESPUÉS de que el servidor esté listo
+                overlay_mgr = get_overlay_manager()
+                overlay_mgr.set_websocket(self.ws_server, self.overlay_event_loop)
+                overlay_mgr.set_server_running(True)
+                overlay_mgr.set_filters(self.show_nopolo_mode, self.show_normal_mode)
+                
                 self.overlay_event_loop.run_forever()
             
             self.overlay_thread = threading.Thread(target=run_server, daemon=True)
             self.overlay_thread.start()
+            
+            # Esperar un momento para que el servidor arranque
+            time.sleep(0.5)
             
             self.overlay_server_running = True
             self.overlay_status_label.setText("🟢 Conectado")
@@ -226,28 +242,16 @@ class OverlayMixin:
     
     def _send_overlay_event(self, text: str, voice: str = "", is_nopolo: bool = False):
         """
-        Envía un evento al overlay cuando se reproduce TTS
-        
-        Args:
-            text: El texto a mostrar
-            voice: Nombre de la voz
-            is_nopolo: True si es modo Nopolo (multi-voz), False si es modo normal (API/voz única)
+        Envía un evento al overlay cuando se reproduce TTS.
+        DEPRECADO: Usa OverlayManager directamente.
         """
-        if self.ws_server and self.overlay_event_loop and self.overlay_server_running:
-            # Filtrar según los checkboxes
-            if is_nopolo and not self.show_nopolo_mode:
-                return  # Modo Nopolo pero filtro desactivado
-            if not is_nopolo and not self.show_normal_mode:
-                return  # Modo normal pero filtro desactivado
-            
-            asyncio.run_coroutine_threadsafe(
-                self.ws_server.send_tts_start(text, voice, is_nopolo),
-                self.overlay_event_loop
-            )
+        overlay_mgr = get_overlay_manager()
+        overlay_mgr.show(text, voice, is_nopolo)
     
     def _clear_overlay(self):
-        if self.ws_server and self.overlay_event_loop and self.overlay_server_running:
-            asyncio.run_coroutine_threadsafe(
-                self.ws_server.send_tts_stop(),
-                self.overlay_event_loop
-            )
+        """
+        Limpia el overlay.
+        DEPRECADO: Usa OverlayManager directamente.
+        """
+        overlay_mgr = get_overlay_manager()
+        overlay_mgr.hide()

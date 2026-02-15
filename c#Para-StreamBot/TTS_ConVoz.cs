@@ -18,6 +18,13 @@
 // • random o aleatorio - Usa una voz aleatoria sin RVC (solo TTS)
 // • Si la voz no existe, se usa automáticamente una voz aleatoria sin RVC
 //
+// OVERLAY (Opcional):
+// -------------------
+// Puedes enviar el nombre del usuario que escribió el mensaje para que
+// aparezca en el overlay de OBS en lugar del nombre de la voz.
+// Para esto, agrega el campo "author" al JSON (ver línea 73).
+// Ejemplo: Si "postInCloud" escribe "!voz goku te amo", el overlay mostrará "postInCloud"
+//
 // CONFIGURACIÓN:
 // --------------
 // • Servidor Nopolo corriendo en: http://localhost:8000
@@ -69,6 +76,17 @@ public class CPHInline
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             string textoSeguro = PrepararMensajeParaJSON(texto);
             string vozSegura = PrepararMensajeParaJSON(voz);
+            
+            // OPCIONAL: Obtener nombre del usuario desde Streamer.bot
+            // Descomenta las siguientes líneas si quieres mostrar el nombre del usuario en el overlay:
+            // string usuario = "";
+            // if (CPH.TryGetArg("userName", out string nombreUsuario))
+            // {
+            //     usuario = PrepararMensajeParaJSON(nombreUsuario);
+            // }
+            // string json = "{\"text\":\"" + textoSeguro + "\",\"voice_id\":\"" + vozSegura + "\",\"author\":\"" + usuario + "\"}";
+            
+            // JSON sin author (comportamiento por defecto - muestra nombre de voz en overlay)
             string json = "{\"text\":\"" + textoSeguro + "\",\"voice_id\":\"" + vozSegura + "\"}";
 
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

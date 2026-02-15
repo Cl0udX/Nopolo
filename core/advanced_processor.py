@@ -117,7 +117,7 @@ class AdvancedAudioProcessor:
                 gc.collect()
                     
             except MemoryError as e:
-                print(f"⚠️ Error de memoria en segmento {i+1}: {e}")
+                print(f"Error de memoria en segmento {i+1}: {e}")
                 print(f"Audio demasiado largo o complejo - saltando segmento")
                 # Liberar memoria y continuar
                 import gc
@@ -125,13 +125,13 @@ class AdvancedAudioProcessor:
                 continue
             except RuntimeError as e:
                 # RuntimeError puede indicar problemas de CUDA/GPU
-                print(f"⚠️ Error de runtime en segmento {i+1}: {e}")
+                print(f"Error de runtime en segmento {i+1}: {e}")
                 print(f"Posible problema de GPU - saltando segmento")
                 import gc
                 gc.collect()
                 continue
             except Exception as e:
-                print(f"⚠️ Error procesando segmento {i+1}: {e}")
+                print(f"Error procesando segmento {i+1}: {e}")
                 import traceback
                 traceback.print_exc()
                 # Continuar con siguiente segmento
@@ -251,7 +251,7 @@ class AdvancedAudioProcessor:
                     
                 except Exception as rvc_error:
                     # Si RVC falla, usar TTS sin conversión
-                    print(f"⚠️ Error en RVC (usando TTS sin conversión): {rvc_error}")
+                    print(f"Error en RVC (usando TTS sin conversión): {rvc_error}")
                     final_audio = tts_audio
                     final_sr = tts_sr
                     

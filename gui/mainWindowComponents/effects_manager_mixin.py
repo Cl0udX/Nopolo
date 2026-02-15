@@ -76,9 +76,9 @@ class EffectsManagerMixin:
                 audio, sr = sf.read(sound_data['path'], dtype='float32')
                 play_wav((audio, sr))
             except Exception as e:
-                print(f"Error reproduciendo sonido {sound_id}: {e}")
+                self.log_to_console(f"Error reproduciendo sonido {sound_id}: {e}")
         else:
-            print(f"No se encontró el sonido {sound_id}")
+            self.log_to_console(f"No se encontró el sonido {sound_id}")
     
     def _play_background_preview(self, bg_id):
         """Reproduce preview de un fondo (solo 5 segundos)"""
@@ -97,9 +97,9 @@ class EffectsManagerMixin:
                 
                 play_wav((preview_audio, sr))
             except Exception as e:
-                print(f"Error reproduciendo fondo {bg_id}: {e}")
+                self.log_to_console(f"Error reproduciendo fondo {bg_id}: {e}")
         else:
-            print(f"No se encontró el fondo {bg_id}")
+            self.log_to_console(f"No se encontró el fondo {bg_id}")
     
     def _test_integrated_filter(self, filter_id, filter_name):
         """Ejecuta un test de un filtro integrado con voz de prueba"""
@@ -112,8 +112,7 @@ class EffectsManagerMixin:
         # Texto de prueba con el filtro (usando profile_id)
         test_text = f"{voice_id}.{filter_id}: Hola como estas, esto es una prueba del filtro {filter_name}. Esto debería sonar con el efecto aplicado."
         
-        print(f"Testing filtro '{filter_id}' ({filter_name})")
-        print(f"Texto: {test_text}")
+        self.log_to_console(f"Testing filtro '{filter_id}' ({filter_name})")
         
         # Usar el modo multi-voz para procesar con el filtro
         try:
@@ -142,4 +141,4 @@ class EffectsManagerMixin:
                 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al probar filtro: {e}")
-            print(f"Error: {e}")
+            self.log_to_console(f"Error: {e}")

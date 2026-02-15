@@ -3,6 +3,8 @@ Mixin para reproducción de audio (TTS + RVC).
 Contiene los métodos principales de síntesis y reproducción.
 """
 
+from core.overlay_manager import get_overlay_manager
+
 
 class PlaybackMixin:
     """Mixin para reproducción de audio"""
@@ -26,8 +28,8 @@ class PlaybackMixin:
             voice_name = profile.display_name if profile else ""
             
             # NO enviar evento aquí, se enviará cuando realmente empiece a reproducir
-            # Agregar a la cola
-            self.audio_queue.add(text, profile, voice_name, self)
+            # Agregar a la cola (sin author porque es GUI local)
+            self.audio_queue.add(text, profile, voice_name, self, author=None)
     
     def _play_multivoice(self, text: str):
         """Procesa y reproduce audio multi-voz en thread separado"""
@@ -45,16 +47,15 @@ class PlaybackMixin:
             sf.write(temp_file.name, audio_data, sample_rate)
             
             # Enviar evento al overlay JUSTO ANTES de reproducir (modo Nopolo = True)
-            if hasattr(self, '_send_overlay_event'):
-                self._send_overlay_event(text, "Multi-Voz", is_nopolo=True)
+            overlay_mgr = get_overlay_manager()
+            overlay_mgr.show(text, "Multi-Voz (GUI)", is_nopolo=True)
             
             # Reproducir (ahora el texto aparece sincronizado con el audio)
             sd.play(audio_data, sample_rate)
             sd.wait()
             
             # Limpiar overlay cuando termina
-            if hasattr(self, '_clear_overlay'):
-                self._clear_overlay()
+            overlay_mgr.hide()
             
             # Limpiar archivo temporal
             import os

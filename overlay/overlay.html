@@ -25,37 +25,136 @@
         
         // Conexión WebSocket
         let ws;
-        let reconnectInterval;
+        let reconnectInterval = null;
+        let hideTimeout = null;
+        let isConnecting = false;
+        let reconnectAttempts = 0;
+        let maxReconnectDelay = 30000; // Máximo 30 segundos
+        let pingInterval = null; // Intervalo para mantener conexión viva
         
         function connect() {
-            ws = new WebSocket(`ws://localhost:${wsPort}/ws`);
+            // Evitar múltiples conexiones simultáneas
+            if (isConnecting) {
+                console.log('⏳ Ya hay una conexión en proceso...');
+                return;
+            }
             
-            ws.onopen = () => {
-                console.log('✅ Conectado al servidor Nopolo TTS');
+            // Limpiar intervalo de reconexión anterior
+            if (reconnectInterval) {
                 clearInterval(reconnectInterval);
-            };
+                reconnectInterval = null;
+            }
             
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                handleMessage(data);
-            };
+            // Limpiar intervalo de ping anterior
+            if (pingInterval) {
+                clearInterval(pingInterval);
+                pingInterval = null;
+            }
             
-            ws.onerror = (error) => {
-                console.error('❌ WebSocket error:', error);
-            };
+            // Cerrar conexión anterior si existe
+            if (ws) {
+                ws.onclose = null; // Evitar que dispare reconexión
+                ws.onerror = null;
+                ws.onmessage = null;
+                try {
+                    ws.close();
+                } catch (e) {
+                    console.log('Error cerrando WebSocket anterior:', e);
+                }
+                ws = null;
+            }
             
-            ws.onclose = () => {
-                console.log('🔌 Desconectado del servidor');
-                // Intentar reconectar cada 3 segundos
-                reconnectInterval = setInterval(() => {
-                    console.log('🔄 Intentando reconectar...');
-                    connect();
-                }, 3000);
-            };
+            isConnecting = true;
+            console.log(`🔄 Conectando al servidor (intento ${reconnectAttempts + 1})...`);
+            
+            try {
+                ws = new WebSocket(`ws://localhost:${wsPort}/ws`);
+                
+                ws.onopen = () => {
+                    console.log('✅ Conectado al servidor Nopolo TTS');
+                    isConnecting = false;
+                    reconnectAttempts = 0; // Reset contador
+                    if (reconnectInterval) {
+                        clearInterval(reconnectInterval);
+                        reconnectInterval = null;
+                    }
+                    
+                    // Iniciar ping periódico para mantener conexión viva
+                    pingInterval = setInterval(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            try {
+                                ws.send(JSON.stringify({ type: 'ping' }));
+                                console.log('💓 Ping enviado');
+                            } catch (e) {
+                                console.error('Error enviando ping:', e);
+                            }
+                        }
+                    }, 25000); // Cada 25 segundos (antes del timeout de 30s del servidor)
+                };
+                
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'pong') {
+                        console.log('💓 Pong recibido');
+                        return;
+                    }
+                    handleMessage(data);
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('❌ WebSocket error:', error);
+                    isConnecting = false;
+                };
+                
+                ws.onclose = (event) => {
+                    console.log('🔌 Desconectado del servidor', event.code, event.reason);
+                    isConnecting = false;
+                    
+                    // Limpiar ping interval
+                    if (pingInterval) {
+                        clearInterval(pingInterval);
+                        pingInterval = null;
+                    }
+                    
+                    // Solo reconectar si no hay ya un intervalo activo
+                    if (!reconnectInterval) {
+                        // Backoff exponencial: 3s, 6s, 12s, 24s, 30s (max)
+                        reconnectAttempts++;
+                        const delay = Math.min(3000 * Math.pow(2, reconnectAttempts - 1), maxReconnectDelay);
+                        console.log(`⏰ Reconectando en ${delay / 1000} segundos...`);
+                        
+                        reconnectInterval = setTimeout(() => {
+                            reconnectInterval = null;
+                            connect();
+                        }, delay);
+                    }
+                };
+            } catch (error) {
+                console.error('❌ Error al crear WebSocket:', error);
+                isConnecting = false;
+            }
         }
+        
+        // Cleanup al cerrar la página
+        window.addEventListener('beforeunload', () => {
+            if (reconnectInterval) {
+                clearTimeout(reconnectInterval);
+            }
+            if (pingInterval) {
+                clearInterval(pingInterval);
+            }
+            if (ws) {
+                ws.close();
+            }
+        });
         
         function handleMessage(data) {
             if (data.type === 'tts_start') {
+                // Cancelar cualquier timeout de ocultación pendiente
+                if (hideTimeout) {
+                    clearTimeout(hideTimeout);
+                    hideTimeout = null;
+                }
                 showTTS(data.text, data.voice, data.is_nopolo || false);
             } else if (data.type === 'tts_stop') {
                 hideTTS();
@@ -63,9 +162,11 @@
         }
         
         function showTTS(text, voice, isNopolo) {
+            console.log(`📺 Mostrando TTS: is_nopolo=${isNopolo}, voice="${voice}", text="${text.substring(0, 50)}..."`);
+            
             // Limpiar contenido anterior
             voiceLabel.textContent = '';
-            textContent.textContent = '';
+            textContent.innerHTML = '';
             
             // Mostrar nombre de voz si está disponible
             if (voice) {
@@ -77,26 +178,31 @@
             
             // Mostrar texto según si es Nopolo o no
             if (isNopolo) {
-                // Modo Nopolo: resaltar sintaxis
+                console.log('✨ Modo Nopolo: resaltando sintaxis');
+                // Modo Nopolo: resaltar sintaxis con colores
                 textContent.innerHTML = highlightNopoloSyntax(text);
             } else {
-                // Modo normal: limpiar sintaxis
-                textContent.textContent = cleanNopoloSyntax(text);
+                console.log('📝 Modo Normal: mostrando texto completo sin colores');
+                // Modo normal: mostrar texto completo tal cual, sin colores
+                textContent.textContent = text;
             }
             
             // Mostrar container con animación
-            container.classList.remove('hidden');
+            container.classList.remove('hidden', 'hiding');
             container.classList.add('show');
         }
         
         function hideTTS() {
+            console.log('🚫 Ocultando overlay');
+            
             // Ocultar con animación
             container.classList.remove('show');
             container.classList.add('hiding');
             
-            setTimeout(() => {
+            hideTimeout = setTimeout(() => {
                 container.classList.remove('hiding');
                 container.classList.add('hidden');
+                hideTimeout = null;
             }, 500); // Duración de la animación de salida
         }
         
