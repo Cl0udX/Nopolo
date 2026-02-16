@@ -80,7 +80,6 @@ fairseq_subfolders = [
 for folder in fairseq_subfolders:
     folder_full_path = os.path.join(fairseq_path, folder)
     if os.path.exists(folder_full_path):
-        # El primer elemento es la ruta real, el segundo es dónde irá en el EXE
         datas.append((folder_full_path, os.path.join('fairseq', folder)))
 
 # Por si acaso, incluimos cualquier archivo .py suelto en la raíz de fairseq
@@ -90,28 +89,48 @@ datas.append((fairseq_path, 'fairseq'))
 datas += collect_data_files('edge_tts')
 datas += collect_data_files('librosa')
 
-# Agregar archivos propios del proyecto
-# Copiar carpetas y archivos importantes a la raíz del bundle (junto al exe)
-from glob import glob
-import shutil
-
+# FUNCIÓN CORREGIDA para copiar carpetas
 def copytree_for_bundle(src, dst):
-    if os.path.exists(src):
-        for root, dirs, files in os.walk(src):
-            for file in files:
-                rel_dir = os.path.relpath(root, src)
-                rel_file = os.path.join(rel_dir, file) if rel_dir != '.' else file
-                datas.append((os.path.join(root, file), os.path.join(dst, rel_file)))
+    """
+    Copia recursivamente una carpeta manteniendo la estructura correcta
+    """
+    if not os.path.exists(src):
+        print(f"WARNING: Carpeta {src} no existe, omitiendo")
+        return
+    
+    for root, dirs, files in os.walk(src):
+        # Calcular ruta relativa desde src
+        rel_dir = os.path.relpath(root, src)
+        
+        for file in files:
+            # Ruta completa del archivo fuente
+            src_file = os.path.join(root, file)
+            
+            # Ruta destino correcta
+            if rel_dir == '.':
+                # Archivo en raíz de src
+                dst_file = os.path.join(dst, file)
+            else:
+                # Archivo en subcarpeta
+                dst_file = os.path.join(dst, rel_dir, file)
+            
+            # Agregar a datas
+            datas.append((src_file, os.path.dirname(dst_file)))
+            print(f"  → Agregando: {src_file} → {dst_file}")
 
+# Copiar carpetas que irán a _internal (luego el script las mueve)
+print("\n📦 Copiando carpetas al bundle...")
 copytree_for_bundle('backgrounds', 'backgrounds')
 copytree_for_bundle('voices', 'voices')
 copytree_for_bundle('sounds', 'sounds')
 copytree_for_bundle('overlay', 'overlay')
 
-# Copiar .env a la raíz
+# Copiar .env si existe
 if os.path.exists('.env'):
-    datas.append(('.env', '.env'))
+    datas.append(('.env', '.'))
+    print("  → Agregando: .env")
 
+# Copiar carpetas del código fuente
 datas += [
     ('assets', 'assets'),
     ('config', 'config'),
@@ -122,18 +141,14 @@ datas += [
     ('version.py', '.'),
 ]
 
-# ARCHIVOS QUE IRÁN EN LA RAÍZ DEL EJECUTABLE (no en _internal)
-# Estos se copiarán manualmente en el script de build
-
-# Binarios adicionales
+# Binarios adicionales (DLLs de CUDA/Torch)
 binaries = []
 try:
     from PyInstaller.utils.hooks import collect_dynamic_libs
-    # Esto recogerá lo que Torch tenga disponible en ese clon específico
     binaries += collect_dynamic_libs('torch')
-    print("INFO: DLLs de Torch recolectadas con éxito.")
+    print("\n✅ DLLs de Torch recolectadas con éxito.")
 except Exception as e:
-    print(f"WARNING: No se pudieron recolectar librerías dinámicas de Torch: {e}")
+    print(f"\n⚠ WARNING: No se pudieron recolectar librerías dinámicas de Torch: {e}")
 
 a = Analysis(
     ['main.py'],
@@ -164,18 +179,18 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name=f'{__app_name__}-{__version__}',  # Nombre con versión automática
+    name=f'{__app_name__}-{__version__}',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,  # Mostrar consola para debug
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/nopolo_icon.png',  # Icono de la aplicación
+    icon='assets/nopolo_icon.png',
     version_file=None,
 )
 
@@ -187,5 +202,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name=f'{__app_name__}-{__version__}',  # Carpeta con versión
+    name=f'{__app_name__}-{__version__}',
 )
