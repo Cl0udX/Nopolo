@@ -55,11 +55,19 @@ hiddenimports += collect_submodules('fairseq.optim')
 hiddenimports += collect_submodules('fairseq.criterions')
 hiddenimports += collect_submodules('fairseq.logging')
 
+import fairseq
+fairseq_path = os.path.dirname(fairseq.__file__)
+
+
 # Datos adicionales a incluir
 datas = []
 datas += collect_data_files('edge_tts')
-datas += collect_data_files('fairseq')
 datas += collect_data_files('librosa')
+
+for folder in ['criterions', 'models', 'tasks', 'modules', 'data']:
+    folder_path = os.path.join(fairseq_path, folder)
+    if os.path.exists(folder_path):
+        datas.append((folder_path, os.path.join('fairseq', folder)))
 
 # Agregar archivos propios del proyecto
 datas += [
@@ -74,8 +82,16 @@ datas += [
     ('LICENSE', '.'),
 ]
 
-# Binarios adicionales (opcional)
+# Binarios adicionales
 binaries = []
+
+try:
+    from PyInstaller.utils.hooks import collect_dynamic_libs
+    # Esto recogerá lo que Torch tenga disponible en ese clon específico
+    binaries += collect_dynamic_libs('torch')
+    print("INFO: DLLs de Torch recolectadas con éxito.")
+except Exception as e:
+    print(f"WARNING: No se pudieron recolectar librerías dinámicas de Torch: {e}")
 
 a = Analysis(
     ['main.py'],
