@@ -91,18 +91,34 @@ datas += collect_data_files('edge_tts')
 datas += collect_data_files('librosa')
 
 # Agregar archivos propios del proyecto
+# Copiar carpetas y archivos importantes a la raíz del bundle (junto al exe)
+from glob import glob
+import shutil
+
+def copytree_for_bundle(src, dst):
+    if os.path.exists(src):
+        for root, dirs, files in os.walk(src):
+            for file in files:
+                rel_dir = os.path.relpath(root, src)
+                rel_file = os.path.join(rel_dir, file) if rel_dir != '.' else file
+                datas.append((os.path.join(root, file), os.path.join(dst, rel_file)))
+
+copytree_for_bundle('backgrounds', 'backgrounds')
+copytree_for_bundle('voices', 'voices')
+copytree_for_bundle('sounds', 'sounds')
+
+# Copiar .env a la raíz
+if os.path.exists('.env'):
+    datas.append(('.env', '.env'))
+
 datas += [
     ('assets', 'assets'),
     ('config', 'config'),
-    ('backgrounds', 'backgrounds'),
-    ('voices', 'voices'),
-    ('sounds', 'sounds'),
     ('gui', 'gui'),
     ('core', 'core'),
     ('rvc', 'rvc'),
     ('scripts', 'scripts'),
     ('version.py', '.'),
-    ('.env', '.'),
 ]
 
 # ARCHIVOS QUE IRÁN EN LA RAÍZ DEL EJECUTABLE (no en _internal)
