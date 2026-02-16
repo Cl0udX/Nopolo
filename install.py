@@ -1,185 +1,204 @@
 #!/usr/bin/env python3
 """
-Script de instalación interactivo para Nopolo
-Detecta el sistema operativo y guía la instalación de dependencias
+Script de instalación automatizada para Nopolo
+Instala dependencias en el orden correcto para evitar conflictos
 """
+
 import sys
-import platform
 import subprocess
-import os
+import platform
+from pathlib import Path
 
-def print_banner():
-    print("=" * 70)
-    print("  NOPOLO - Instalador Interactivo")
-    print("  Voice Studio TTS con conversión RVC")
-    print("=" * 70)
-    print()
+class Colors:
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    CYAN = '\033[96m'
 
-def detect_system():
-    """Detecta el sistema operativo"""
-    system = platform.system()
-    if system == "Darwin":
-        return "macOS"
-    elif system == "Windows":
-        return "Windows"
-    elif system == "Linux":
-        return "Linux"
+def print_header(text):
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*70}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{text.center(70)}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'='*70}{Colors.ENDC}\n")
+
+def print_success(text):
+    print(f"{Colors.OKGREEN}✓ {text}{Colors.ENDC}")
+
+def print_warning(text):
+    print(f"{Colors.WARNING}⚠ {text}{Colors.ENDC}")
+
+def print_error(text):
+    print(f"{Colors.FAIL}✗ {text}{Colors.ENDC}")
+
+def run_command(cmd, description):
+    """Ejecuta un comando y muestra el resultado"""
+    print(f"\n{Colors.CYAN}→ {description}...{Colors.ENDC}")
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=False, shell=True)
+        print_success(f"{description} completado")
+        return True
+    except subprocess.CalledProcessError as e:
+        print_error(f"{description} falló")
+        return False
+
+def check_venv():
+    """Verifica si estamos en un entorno virtual"""
+    in_venv = hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
+    
+    if not in_venv:
+        print_warning("No estás en un entorno virtual")
+        print("Recomendación:")
+        print("  python -m venv .venv")
+        if platform.system() == "Windows":
+            print("  .venv\\Scripts\\activate")
+        else:
+            print("  source .venv/bin/activate")
+        
+        response = input("\n¿Continuar de todos modos? [s/N]: ").strip().lower()
+        if response not in ['s', 'si', 'yes', 'y']:
+            sys.exit(0)
     else:
-        return "Unknown"
+        print_success("Entorno virtual detectado")
 
-def check_python_version():
-    """Verifica que Python sea 3.10.x o 3.11.x"""
-    version = sys.version_info
-    if version.major == 3 and (version.minor == 10 or version.minor == 11):
-        print(f"Python {version.major}.{version.minor}.{version.micro} detectado")
-        return True
-    else:
-        print(f"Python {version.major}.{version.minor}.{version.micro} detectado")
-        print("Nopolo requiere Python 3.10.x o 3.11.x")
-        print("Descarga: https://www.python.org/downloads/")
-        return False
-
-def install_base_requirements():
-    """Instala las dependencias base"""
-    print("\nInstalando dependencias base...")
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements-base.txt"])
-        print("Dependencias base instaladas correctamente")
-        return True
-    except subprocess.CalledProcessError:
-        print("Error al instalar dependencias base")
-        return False
-
-def install_torch(config):
-    """Instala PyTorch según la configuración"""
-    print(f"\nInstalando PyTorch para {config}...")
+def select_gpu():
+    """Pregunta al usuario qué GPU tiene"""
+    print("\n" + "="*70)
+    print("Selecciona tu configuración de hardware:")
+    print("="*70)
+    print("\n1. GPU NVIDIA RTX 50xx (CUDA 12.8 - Experimental)")
+    print("2. GPU NVIDIA RTX 40xx/30xx (CUDA 12.4 - Estable)")
+    print("3. GPU NVIDIA RTX 20xx/GTX 16xx (CUDA 12.1)")
+    print("4. Sin GPU (CPU only)")
     
-    commands = {
-        "cuda124": [sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio", 
-                    "--index-url", "https://download.pytorch.org/whl/cu124"],
-        "cuda128": [sys.executable, "-m", "pip", "install", "--pre", "torch", "torchvision", "torchaudio",
-                    "--index-url", "https://download.pytorch.org/whl/nightly/cu128"],
-        "cpu": [sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio"],
-        "mac": [sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio"]
-    }
-    
-    try:
-        subprocess.check_call(commands[config])
-        print(f"PyTorch instalado correctamente ({config})")
-        return True
-    except subprocess.CalledProcessError:
-        print(f"Error al instalar PyTorch ({config})")
-        return False
-
-def install_fairseq():
-    """Instala Fairseq"""
-    print("\nInstalando Fairseq (puede tardar varios minutos)...")
-    system = detect_system()
-    
-    if system == "Windows":
-        print("En Windows, esto puede requerir permisos de administrador")
-    
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", 
-                             "git+https://github.com/Tps-F/fairseq.git@main"])
-        print("Fairseq instalado correctamente")
-        return True
-    except subprocess.CalledProcessError:
-        print("Error al instalar Fairseq")
-        print("   Intenta ejecutar como administrador o instalar manualmente:")
-        print("   git clone https://github.com/Tps-F/fairseq.git")
-        print("   cd fairseq && pip install -e .")
-        return False
+    while True:
+        choice = input("\nOpción [1-4]: ").strip()
+        
+        if choice == '1':
+            return 'cuda128', '--pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128'
+        elif choice == '2':
+            return 'cuda124', 'torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124'
+        elif choice == '3':
+            return 'cuda121', 'torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121'
+        elif choice == '4':
+            return 'cpu', 'torch torchvision torchaudio'
+        else:
+            print_error("Opción inválida. Intenta de nuevo.")
 
 def main():
-    print_banner()
+    print_header("NOPOLO - Instalación de Dependencias")
     
-    # Verificar Python
-    if not check_python_version():
-        sys.exit(1)
+    # 1. Verificar entorno virtual
+    check_venv()
     
-    # Detectar sistema
-    system = detect_system()
-    print(f"Sistema operativo: {system}")
+    # 2. Seleccionar GPU
+    gpu_type, torch_cmd = select_gpu()
     
-    # Seleccionar configuración de hardware
-    print("\n" + "=" * 70)
-    print("Selecciona tu configuración de hardware:")
-    print("=" * 70)
+    print(f"\n{Colors.CYAN}Configuración seleccionada: {gpu_type.upper()}{Colors.ENDC}")
     
-    if system == "macOS":
-        print("1. macOS con Apple Silicon (M1/M2/M3)")
-        print("2. macOS con Intel")
-        choice = input("\nOpción [1-2]: ").strip()
-        
-        if choice in ["1", "2"]:
-            torch_config = "mac"
-        else:
-            print("Opción inválida")
-            sys.exit(1)
-    
-    else:  # Windows o Linux
-        print("1. CPU solamente (sin GPU NVIDIA)")
-        print("2. GPU NVIDIA RTX 30xx/40xx (CUDA 12.4)")
-        print("3. GPU NVIDIA RTX 50xx Blackwell (CUDA 12.8 - EXPERIMENTAL)")
-        choice = input("\nOpción [1-3]: ").strip()
-        
-        config_map = {
-            "1": "cpu",
-            "2": "cuda124",
-            "3": "cuda128"
-        }
-        
-        if choice in config_map:
-            torch_config = config_map[choice]
-        else:
-            print("Opción inválida")
-            sys.exit(1)
-    
-    # Confirmar instalación
-    print("\n" + "=" * 70)
-    print(f"Configuración seleccionada: {torch_config}")
-    print("=" * 70)
-    confirm = input("\n¿Proceder con la instalación? [s/N]: ").strip().lower()
-    
-    if confirm not in ["s", "si", "yes", "y"]:
-        print("Instalación cancelada")
+    # Confirmar
+    response = input("\n¿Proceder con la instalación? [s/N]: ").strip().lower()
+    if response not in ['s', 'si', 'yes', 'y']:
+        print_warning("Instalación cancelada")
         sys.exit(0)
     
-    # Proceso de instalación
-    print("\n" + "=" * 70)
-    print("Iniciando instalación...")
-    print("=" * 70)
-    
-    # 1. Instalar dependencias base
-    if not install_base_requirements():
+    # 3. Actualizar pip
+    print_header("Paso 1/5: Actualizando pip")
+    if not run_command(f"{sys.executable} -m pip install --upgrade pip", "Actualizar pip"):
         sys.exit(1)
     
-    # 2. Instalar PyTorch
-    if not install_torch(torch_config):
+    # 4. Instalar PyTorch PRIMERO
+    print_header("Paso 2/5: Instalando PyTorch")
+    print(f"{Colors.WARNING}⚠ IMPORTANTE: Instalando PyTorch PRIMERO para evitar conflictos{Colors.ENDC}")
+    
+    if not run_command(f"pip install {torch_cmd} --force-reinstall --no-cache-dir", "Instalar PyTorch"):
+        print_error("Error instalando PyTorch")
         sys.exit(1)
     
-    # 3. Instalar Fairseq
-    if not install_fairseq():
-        print("Fairseq falló, pero puedes intentar instalarlo manualmente después")
+    # 5. Verificar PyTorch
+    print("\n" + "="*70)
+    print("Verificando instalación de PyTorch...")
+    print("="*70)
+    try:
+        import torch
+        cuda_available = torch.cuda.is_available()
+        cuda_version = torch.version.cuda if cuda_available else "N/A"
+        torch_version = torch.__version__
+        
+        print(f"\n{Colors.CYAN}PyTorch instalado:{Colors.ENDC}")
+        print(f"  Versión: {torch_version}")
+        print(f"  CUDA disponible: {cuda_available}")
+        print(f"  Versión CUDA: {cuda_version}")
+        
+        if gpu_type.startswith('cuda') and not cuda_available:
+            print_error("GPU no detectada. Verifica tus drivers NVIDIA.")
+            response = input("\n¿Continuar de todos modos? [s/N]: ").strip().lower()
+            if response not in ['s', 'si', 'yes', 'y']:
+                sys.exit(1)
+    except ImportError:
+        print_error("No se pudo importar PyTorch")
+        sys.exit(1)
     
-    # Instrucciones finales
-    print("\n" + "=" * 70)
-    print("¡Instalación completada!")
-    print("=" * 70)
-    
-    if system == "macOS":
-        print("\nSiguiente paso:")
-        print("   Ejecuta Nopolo con: ./run_nopolo_full.sh")
-        print("   (O usa run_nopolo_gui.sh para solo interfaz)")
+    # 6. Instalar FAISS según GPU
+    print_header("Paso 3/5: Instalando FAISS")
+    if gpu_type.startswith('cuda'):
+        faiss_pkg = 'faiss-gpu'
     else:
-        print("\nSiguiente paso:")
-        print("   Ejecuta Nopolo con: python main.py --with-api")
-        print("   (O usa python main.py para solo interfaz)")
+        faiss_pkg = 'faiss-cpu'
     
-    print("\nDocumentación completa en README.md")
-    print("Soporte: https://github.com/tu-usuario/nopolo/issues")
-    print()
+    if not run_command(f"pip install {faiss_pkg}", f"Instalar {faiss_pkg}"):
+        print_warning(f"Error instalando {faiss_pkg}, continuando...")
+    
+    # 7. Instalar dependencias base
+    print_header("Paso 4/5: Instalando dependencias base")
+    
+    if not Path('requirements-base.txt').exists():
+        print_error("No se encontró requirements-base.txt")
+        sys.exit(1)
+    
+    if not run_command("pip install -r requirements-base.txt", "Instalar dependencias base"):
+        print_error("Error instalando dependencias base")
+        sys.exit(1)
+    
+    # 8. Instalar Fairseq
+    print_header("Paso 5/5: Instalando Fairseq")
+    print(f"{Colors.WARNING}⚠ Esto puede tardar varios minutos...{Colors.ENDC}")
+    
+    if platform.system() == "Windows":
+        print(f"{Colors.WARNING}⚠ Windows: Si falla, ejecuta PowerShell como Administrador{Colors.ENDC}")
+    
+    if not run_command("pip install git+https://github.com/Tps-F/fairseq.git@main", "Instalar Fairseq"):
+        print_error("Error instalando Fairseq")
+        print("\nIntenta manualmente:")
+        print("  git clone https://github.com/Tps-F/fairseq.git")
+        print("  cd fairseq")
+        print("  pip install -e .")
+        sys.exit(1)
+    
+    # 9. Resumen final
+    print("\n" + "="*70)
+    print_success("INSTALACIÓN COMPLETADA")
+    print("="*70)
+    
+    print(f"\n{Colors.CYAN}Resumen:{Colors.ENDC}")
+    print(f"  • PyTorch: {torch_version} ({'GPU' if cuda_available else 'CPU'})")
+    print(f"  • FAISS: {faiss_pkg}")
+    print(f"  • Dependencias base: Instaladas")
+    print(f"  • Fairseq: Instalado")
+    
+    print(f"\n{Colors.CYAN}Siguiente paso:{Colors.ENDC}")
+    print("  python main.py")
+    
+    print("\n" + "="*70)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print_warning("\n\nInstalación cancelada por el usuario")
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"\n\nError inesperado: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

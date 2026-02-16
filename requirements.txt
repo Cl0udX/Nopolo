@@ -1,0 +1,36 @@
+# ================================================================
+# NOPOLO - Instalación de Dependencias
+# ================================================================
+# 
+# IMPORTANTE: Sigue este orden exacto para evitar conflictos
+#
+# 1. Crear entorno virtual:
+#    python -m venv .venv
+#    .venv\Scripts\activate  (Windows)
+#    source .venv/bin/activate  (Linux/macOS)
+#
+# 2. Instalar PyTorch PRIMERO (según tu GPU):
+#
+#    GPU NVIDIA RTX 50xx (CUDA 12.8 - Experimental):
+#    pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+#
+#    GPU NVIDIA RTX 40xx/30xx (CUDA 12.4 - Estable):
+#    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+#
+#    Sin GPU (CPU only):
+#    pip install torch torchvision torchaudio
+#
+# 3. Instalar dependencias base:
+#    pip install -r requirements-base.txt
+#
+# 4. Instalar Fairseq (como Administrador):
+#    pip install git+https://github.com/Tps-F/fairseq.git@main
+#
+# 5. Verificar instalación:
+#    python -c "import torch; print(f'CUDA: {torch.cuda.is_available()} | Version: {torch.__version__}')"
+#
+# ================================================================
+
+# Este archivo es solo informativo
+# No ejecutes: pip install -r requirements.txt
+# Sigue los pasos de arriba

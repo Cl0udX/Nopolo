@@ -1,0 +1,21 @@
+# Dependencias base para Nopolo (todas las plataformas)
+PySide6>=6.6.0
+sounddevice>=0.4.6
+numpy>=1.24.0
+scipy>=1.10.0
+pydub>=0.25.1
+edge-tts>=6.1.0
+soundfile>=0.12.1
+librosa>=0.10.0
+praat-parselmouth>=0.4.3
+pyworld>=0.3.4
+torchcrepe>=0.0.20
+faiss-cpu>=1.7.4
+python-dotenv>=1.0.0
+av>=11.0.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+pydantic>=2.5.0
+aiohttp>=3.9.0
+tensorboardX>=2.6
+google-cloud-texttospeech>=2.16.0
