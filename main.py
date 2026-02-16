@@ -2,6 +2,12 @@
 import sys
 import argparse
 import os
+import builtins
+if not hasattr(builtins, 'help'):
+    def help_placeholder(*args, **kwargs):
+        pass
+    builtins.help = help_placeholder
+
 from dotenv import load_dotenv
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon, QPixmap
