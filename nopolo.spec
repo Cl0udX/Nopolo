@@ -129,5 +129,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Nopolo',
+    name='Nopolo-1.0.0',
 )
