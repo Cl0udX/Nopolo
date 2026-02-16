@@ -2,177 +2,83 @@
 # -*- coding: utf-8 -*-
 """
 Generador de Guía HTML para Nopolo TTS
-Versión Standalone - No requiere Python instalado
 """
 
 import json
-import os
-import sys
 from pathlib import Path
-from datetime import datetime
-
-def get_base_path():
-    """Obtiene la ruta base del script o ejecutable"""
-    if getattr(sys, 'frozen', False):
-        # Ejecutable compilado con PyInstaller
-        return Path(sys.executable).parent
-    else:
-        # Script Python normal
-        return Path(__file__).parent
 
 def load_json_config(file_path):
-    """Carga un archivo JSON de configuración"""
     try:
-        if not file_path.exists():
-            print(f"⚠ Archivo no encontrado: {file_path}")
-            return {}
-        
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except json.JSONDecodeError as e:
-        print(f"❌ Error al leer JSON {file_path}: {e}")
-        return {}
     except Exception as e:
-        print(f"❌ Error al cargar {file_path}: {e}")
+        print(f"Error al cargar {file_path}: {e}")
         return {}
 
 def generate_voice_cards(voices_list):
     if not voices_list:
         return '<p style="color: #999; text-align: center; padding: 40px;">No hay voces configuradas</p>'
-    
     cards = []
-    for voice in sorted(voices_list, key=lambda x: x['id'].lower()):
-        cards.append(
-            f'<div class="item-card">'
-            f'<div class="item-id">{voice["id"]}</div>'
-            f'<div class="item-name">{voice["name"]}</div>'
-            f'</div>'
-        )
+    for voice in sorted(voices_list, key=lambda x: x['id']):
+        cards.append(f'<div class="item-card"><div class="item-id">{voice["id"]}</div><div class="item-name">{voice["name"]}</div></div>')
     return ''.join(cards)
 
 def generate_sound_cards(sounds_list):
     if not sounds_list:
         return '<p style="color: #999; text-align: center; padding: 40px;">No hay sonidos configurados</p>'
-    
     cards = []
     for sound in sorted(sounds_list, key=lambda x: int(x['id']) if x['id'].isdigit() else 9999):
-        cards.append(
-            f'<div class="item-card">'
-            f'<div class="item-id">{sound["id"]}</div>'
-            f'<div class="item-name">{sound["name"]}</div>'
-            f'</div>'
-        )
+        cards.append(f'<div class="item-card"><div class="item-id">{sound["id"]}</div><div class="item-name">{sound["name"]}</div></div>')
     return ''.join(cards)
 
 def generate_background_cards(backgrounds_list):
     if not backgrounds_list:
         return '<p style="color: #999; text-align: center; padding: 40px;">No hay fondos configurados</p>'
-    
     cards = []
-    for bg in sorted(backgrounds_list, key=lambda x: x['id'].lower()):
-        cards.append(
-            f'<div class="item-card">'
-            f'<div class="item-id">{bg["id"]}</div>'
-            f'<div class="item-name">{bg["name"]}</div>'
-            f'</div>'
-        )
+    for bg in sorted(backgrounds_list, key=lambda x: x['id']):
+        cards.append(f'<div class="item-card"><div class="item-id">{bg["id"]}</div><div class="item-name">{bg["name"]}</div></div>')
     return ''.join(cards)
 
 def generate_html_guide():
-    """Genera la guía HTML con las configuraciones actuales"""
-    print("\n" + "="*70)
-    print("🎙️  GENERADOR DE GUÍA HTML - NOPOLO TTS")
-    print("="*70 + "\n")
+    base_path = Path(__file__).parent
+    voices_data = load_json_config(base_path / 'config' / 'voices.json')
+    sounds_data = load_json_config(base_path / 'config' / 'sounds.json')
+    backgrounds_data = load_json_config(base_path / 'config' / 'backgrounds.json')
     
-    base_path = get_base_path()
-    print(f"📁 Ruta base: {base_path}")
-    
-    # Cargar configuraciones
-    config_path = base_path / 'config'
-    
-    if not config_path.exists():
-        print(f"\n❌ ERROR: No se encontró la carpeta 'config'")
-        print(f"   Ruta esperada: {config_path}")
-        input("\nPresiona ENTER para salir...")
-        return False
-    
-    print(f"✅ Carpeta config encontrada")
-    
-    # Cargar archivos JSON
-    voices_data = load_json_config(config_path / 'voices.json')
-    sounds_data = load_json_config(config_path / 'sounds.json')
-    backgrounds_data = load_json_config(config_path / 'backgrounds.json')
-    
-    # Procesar voces
     voices_list = []
     if 'profiles' in voices_data:
         for voice_id, voice_data in voices_data['profiles'].items():
             display_name = voice_data.get('display_name', voice_id)
             voices_list.append({'id': voice_id, 'name': display_name})
     
-    print(f"🎤 Voces cargadas: {len(voices_list)}")
-    
-    # Procesar sonidos
     sounds_list = []
     if 'sounds' in sounds_data:
         for sound in sounds_data['sounds']:
-            sounds_list.append({
-                'id': sound.get('id', '?'),
-                'name': sound.get('name', 'Sin nombre')
-            })
+            sounds_list.append({'id': sound.get('id', '?'), 'name': sound.get('name', 'Sin nombre')})
     
-    print(f"🔊 Sonidos cargados: {len(sounds_list)}")
-    
-    # Procesar fondos
     backgrounds_list = []
     if 'backgrounds' in backgrounds_data:
         for bg_id, bg_data in backgrounds_data['backgrounds'].items():
             bg_name = bg_data.get('name', bg_id)
             backgrounds_list.append({'id': bg_id, 'name': bg_name})
     
-    print(f"🎵 Fondos cargados: {len(backgrounds_list)}")
-    
-    # Generar HTML
     output_path = base_path / 'guia_nopolo.html'
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(generate_html_content(voices_list, sounds_list, backgrounds_list))
     
-    try:
-        with open(output_path, 'w', encoding='utf-8') as f:
-            html_content = generate_html_content(voices_list, sounds_list, backgrounds_list)
-            f.write(html_content)
-        
-        print(f"\n{'='*70}")
-        print(f"✅ GUÍA GENERADA EXITOSAMENTE")
-        print(f"{'='*70}")
-        print(f"\n📄 Archivo: {output_path}")
-        print(f"📏 Tamaño: {output_path.stat().st_size / 1024:.2f} KB")
-        print(f"🕐 Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"\n💡 Abre el archivo en tu navegador para ver la guía")
-        
-        # Intentar abrir en navegador
-        try:
-            import webbrowser
-            webbrowser.open(str(output_path))
-            print(f"\n🌐 Abriendo en navegador...")
-        except:
-            pass
-        
-        return True
-        
-    except Exception as e:
-        print(f"\n❌ ERROR al guardar el archivo HTML: {e}")
-        return False
+    print(f"Guía HTML generada: {output_path}")
+    print(f"{len(voices_list)} voces | {len(sounds_list)} sonidos | {len(backgrounds_list)} fondos")
 
 def generate_html_content(voices_list, sounds_list, backgrounds_list):
-    """Genera el contenido HTML de la guía"""
     return f'''<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nopolo TTS - Guía de Uso</title>
+<title>Nopolo TTS - Guía</title>
 <style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }}
+body {{ font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }}
 .container {{ max-width: 1400px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }}
 .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; text-align: center; }}
 .header h1 {{ font-size: 3em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }}
@@ -205,8 +111,6 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background
 .filter-item {{ background: white; padding: 12px; border-radius: 5px; border-left: 3px solid #667eea; font-family: monospace; }}
 .filter-item strong {{ color: #667eea; font-size: 1.1em; }}
 .section-title {{ color: #667eea; font-size: 1.8em; margin: 30px 0 20px 0; border-bottom: 2px solid #667eea; padding-bottom: 10px; }}
-.search-box {{ width: 100%; padding: 15px; font-size: 1.1em; border: 2px solid #667eea; border-radius: 8px; margin-bottom: 20px; }}
-.search-box:focus {{ outline: none; box-shadow: 0 0 10px rgba(102, 126, 234, 0.3); }}
 @media (max-width: 768px) {{
 .header h1 {{ font-size: 2em; }}
 .main-tab-content {{ padding: 20px; }}
@@ -224,9 +128,9 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background
 
 <div class="main-tabs">
 <button class="main-tab active" onclick="openMainTab(event, 'guia')">📖 Guía de Uso</button>
-<button class="main-tab" onclick="openMainTab(event, 'voces')">🎤 Voces ({len(voices_list)})</button>
-<button class="main-tab" onclick="openMainTab(event, 'sonidos')">🔊 Sonidos ({len(sounds_list)})</button>
-<button class="main-tab" onclick="openMainTab(event, 'fondos')">🎵 Fondos ({len(backgrounds_list)})</button>
+<button class="main-tab" onclick="openMainTab(event, 'voces')">🎤 Voces</button>
+<button class="main-tab" onclick="openMainTab(event, 'sonidos')">🔊 Sonidos</button>
+<button class="main-tab" onclick="openMainTab(event, 'fondos')">🎵 Fondos</button>
 <button class="main-tab" onclick="openMainTab(event, 'ejemplos')">💡 Ejemplos</button>
 </div>
 
@@ -293,20 +197,17 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background
 
 <div id="voces" class="main-tab-content">
 <h2 class="section-title">🎤 Voces Disponibles ({len(voices_list)} voces)</h2>
-<input type="text" class="search-box" id="searchVoices" onkeyup="searchItems('searchVoices', 'voicesGrid')" placeholder="🔍 Buscar voces...">
-<div class="item-grid" id="voicesGrid">{generate_voice_cards(voices_list)}</div>
+<div class="item-grid">{generate_voice_cards(voices_list)}</div>
 </div>
 
 <div id="sonidos" class="main-tab-content">
 <h2 class="section-title">🔊 Sonidos Disponibles ({len(sounds_list)} sonidos)</h2>
-<input type="text" class="search-box" id="searchSounds" onkeyup="searchItems('searchSounds', 'soundsGrid')" placeholder="🔍 Buscar sonidos...">
-<div class="item-grid" id="soundsGrid">{generate_sound_cards(sounds_list)}</div>
+<div class="item-grid">{generate_sound_cards(sounds_list)}</div>
 </div>
 
 <div id="fondos" class="main-tab-content">
 <h2 class="section-title">🎵 Fondos Musicales Disponibles ({len(backgrounds_list)} fondos)</h2>
-<input type="text" class="search-box" id="searchBackgrounds" onkeyup="searchItems('searchBackgrounds', 'backgroundsGrid')" placeholder="🔍 Buscar fondos...">
-<div class="item-grid" id="backgroundsGrid">{generate_background_cards(backgrounds_list)}</div>
+<div class="item-grid">{generate_background_cards(backgrounds_list)}</div>
 </div>
 
 <div id="ejemplos" class="main-tab-content">
@@ -342,6 +243,17 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background
 <li><code>patolucas.r:</code> - Voz de Pato Lucas con eco/reverb</li>
 </ul>
 </div>
+<div class="example-box">
+<h4>Ejemplo 4: Mezcla de voces y tonos</h4>
+<div class="example-code"><span class="voice">dross:</span> Hola amigos <span class="sound">(aplausos)</span> <span class="voice">homero.pu:</span> Wuju! con voz aguda! <span class="voice">base_male.pd:</span> Y yo con voz grave...</div>
+<p><strong>Explicación:</strong></p>
+<ul style="margin-left: 20px; margin-top: 10px; line-height: 1.8;">
+<li><code>dross:</code> - Voz de Dross normal</li>
+<li><code>(aplausos)</code> - Sonido de aplausos</li>
+<li><code>homero.pu:</code> - Voz de Homero con tono más agudo</li>
+<li><code>base_male.pd:</code> - Voz base con tono más grave</li>
+</ul>
+</div>
 </div>
 </div>
 
@@ -354,49 +266,10 @@ for (var i = 0; i < tabs.length; i++) {{ tabs[i].classList.remove("active"); }}
 document.getElementById(tabName).classList.add("active");
 evt.currentTarget.classList.add("active");
 }}
-
-function searchItems(searchId, gridId) {{
-var input = document.getElementById(searchId);
-var filter = input.value.toUpperCase();
-var grid = document.getElementById(gridId);
-var cards = grid.getElementsByClassName('item-card');
-for (var i = 0; i < cards.length; i++) {{
-var id = cards[i].getElementsByClassName('item-id')[0];
-var name = cards[i].getElementsByClassName('item-name')[0];
-var txtId = id.textContent || id.innerText;
-var txtName = name.textContent || name.innerText;
-if (txtId.toUpperCase().indexOf(filter) > -1 || txtName.toUpperCase().indexOf(filter) > -1) {{
-cards[i].style.display = "";
-}} else {{
-cards[i].style.display = "none";
-}}
-}}
-}}
 </script>
 </body>
 </html>'''
 
-def main():
-    """Función principal"""
-    try:
-        success = generate_html_guide()
-        
-        if success:
-            print(f"\n{'='*70}")
-            print("✅ Proceso completado exitosamente")
-            print("="*70)
-        else:
-            print(f"\n{'='*70}")
-            print("❌ Hubo errores durante la generación")
-            print("="*70)
-        
-    except Exception as e:
-        print(f"\n❌ ERROR CRÍTICO: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    finally:
-        input("\n\nPresiona ENTER para cerrar...")
-
 if __name__ == '__main__':
-    main()
+    print("Generando guía HTML para Nopolo TTS...")
+    generate_html_guide()
