@@ -13,7 +13,6 @@ env/
 *.pt
 *.pth
 *.index
-voices/
 
 # Audio temporal
 *.wav

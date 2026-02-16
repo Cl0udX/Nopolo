@@ -343,15 +343,21 @@ Antes de distribuir el ejecutable:
 nopolo-v1.0.0-windows-cuda124.zip
 ├── Nopolo.exe
 ├── _internal/ (librerías)
-├── README.md
-├── LICENSE
-├── .env.example
+├── version.py
+├── .env
 ├── config/
-│   ├── voices.json.example
-│   ├── sounds.json.example
-│   └── backgrounds.json.example
+│   ├── app_settings.json
+│   ├── sounds.json
+│   ├── backgrounds.json
+│   ├── providers.json
+│   └── voices.json
+├── models/ (Modelos RVC se descargan en automatico cuando usa la aplicación)
+├── backgrounds/
+│   └── README.txt (instrucciones para agregar fondos personalizados)
+├── sounds/
+│   └── README.txt (instrucciones para agregar efectos de sonido personalizados)
 └── voices/
-    └── README.txt (instrucciones para agregar modelos)
+    └── README.txt (instrucciones para agregar voces personalizadas)
 ```
 
 ### Subir a GitHub Release:

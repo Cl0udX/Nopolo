@@ -3,10 +3,13 @@
 PyInstaller spec file para Nopolo
 Genera un ejecutable standalone para Windows
 """
-
 import sys
 import os
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+# Importar la versión del proyecto
+sys.path.insert(0, os.path.abspath('.'))
+from version import __version__, __app_name__
 
 block_cipher = None
 
@@ -45,6 +48,7 @@ hiddenimports += collect_submodules('PySide6')
 hiddenimports += collect_submodules('fastapi')
 hiddenimports += collect_submodules('uvicorn')
 hiddenimports += collect_submodules('torch')
+
 # Incluir todos los submódulos de fairseq y sus dependencias
 hiddenimports += collect_submodules('fairseq')
 hiddenimports += collect_submodules('fairseq.models')
@@ -56,6 +60,7 @@ hiddenimports += collect_submodules('fairseq.criterions')
 hiddenimports += collect_submodules('fairseq.logging')
 
 datas = []
+
 import fairseq
 fairseq_path = os.path.dirname(fairseq.__file__)
 
@@ -84,22 +89,27 @@ datas.append((fairseq_path, 'fairseq'))
 # Datos adicionales a incluir
 datas += collect_data_files('edge_tts')
 datas += collect_data_files('librosa')
+
 # Agregar archivos propios del proyecto
 datas += [
     ('assets', 'assets'),
     ('config', 'config'),
+    ('backgrounds', 'backgrounds'),
+    ('voices', 'voices'),
+    ('sounds', 'sounds'),
     ('gui', 'gui'),
     ('core', 'core'),
     ('rvc', 'rvc'),
     ('scripts', 'scripts'),
-    ('.env.example', '.'),
-    ('README.md', '.'),
-    ('LICENSE', '.'),
+    ('version.py', '.'),
+    ('.env', '.'),
 ]
+
+# ARCHIVOS QUE IRÁN EN LA RAÍZ DEL EJECUTABLE (no en _internal)
+# Estos se copiarán manualmente en el script de build
 
 # Binarios adicionales
 binaries = []
-
 try:
     from PyInstaller.utils.hooks import collect_dynamic_libs
     # Esto recogerá lo que Torch tenga disponible en ese clon específico
@@ -137,7 +147,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Nopolo',
+    name=f'{__app_name__}-{__version__}',  # Nombre con versión automática
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -160,5 +170,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Nopolo-1.0.0',
+    name=f'{__app_name__}-{__version__}',  # Carpeta con versión
 )
