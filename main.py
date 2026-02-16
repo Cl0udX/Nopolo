@@ -54,7 +54,43 @@ def setup_app_icon(app: QApplication):
         icon.addPixmap(pixmap.scaled(256, 256, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         app.setWindowIcon(icon)
 
+def setup_signal_handlers():
+    """Configura manejadores de señales para limpieza de emergencia"""
+    import signal
+    import sys
+    
+    def emergency_shutdown(signum, frame):
+        """Limpieza de emergencia antes de cerrar"""
+        print("\n" + "="*50)
+        print("SEÑAL DE CIERRE RECIBIDA - Ejecutando limpieza de emergencia...")
+        print("="*50)
+        
+        try:
+            # Intentar limpiar el motor RVC si existe
+            from gui.main_window import MainWindow
+            if hasattr(MainWindow, '_instance') and MainWindow._instance:
+                if hasattr(MainWindow._instance, 'audio_queue') and MainWindow._instance.audio_queue:
+                    if hasattr(MainWindow._instance.audio_queue, 'rvc_engine') and MainWindow._instance.audio_queue.rvc_engine:
+                        MainWindow._instance.audio_queue.rvc_engine.emergency_cleanup()
+        except Exception as e:
+            print(f"Error en limpieza de emergencia: {e}")
+        
+        print("Limpieza completada. Cerrando programa...")
+        sys.exit(0)
+    
+    # Registrar manejadores para señales comunes
+    signal.signal(signal.SIGINT, emergency_shutdown)   # Ctrl+C
+    signal.signal(signal.SIGTERM, emergency_shutdown)  # Termination signal
+    
+    # En macOS, también manejar SIGUSR1 para debugging
+    if sys.platform == "darwin":
+        signal.signal(signal.SIGUSR1, emergency_shutdown)
+
+
 def main():
+    # Configurar manejadores de señales ANTES de crear QApplication
+    setup_signal_handlers()
+    
     parser = argparse.ArgumentParser(
         description="Nopolo TTS - Text to Speech con RVC",
         formatter_class=argparse.RawDescriptionHelpFormatter,

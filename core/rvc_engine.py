@@ -2,6 +2,12 @@ import sys
 import os
 import tempfile
 import numpy as np
+import gc
+import threading
+import multiprocessing
+import signal
+import traceback
+from contextlib import contextmanager
 
 # CRÍTICO: Importar parche ANTES de torch, fairseq, RVC
 # Esto deshabilita Numba JIT y MPS que causan segfault en Mac
@@ -56,8 +62,12 @@ class RVCEngine:
         
         # Contador de conversiones para prevenir memory leaks
         self.conversion_count = 0
-        self.max_conversions_before_restart = 50  # Reiniciar motor cada 50 conversiones
-        
+        # Configuración recomendada: 5 conversiones antes de reiniciar
+        # - 3: Máxima seguridad (uso ligero)
+        # - 5: Balance óptimo (uso normal) 
+        # - 10: Uso intensivo (mayor rendimiento)
+        self.max_conversions_before_restart = 5
+
         # Cargar modelo si se proporcionó config
         if config:
             self.load_model(config)
@@ -316,21 +326,21 @@ class RVCEngine:
             # Guardar configuración actual
             current_config = self.config
             
-            # Limpiar completamente el VC actual
-            if hasattr(self.vc, 'pipeline'):
-                del self.vc.pipeline
-            if hasattr(self.vc, 'net_g'):
-                del self.vc.net_g
-            if hasattr(self.vc, 'hubert_model'):
-                del self.vc.hubert_model
+            print("Iniciando reinicio completo del motor RVC...")
             
-            # Limpieza agresiva de memoria
-            self._cleanup_memory(force=True)
+            # Paso 1: Limpiar pipeline y modelos
+            self._cleanup_pipeline_completely()
             
-            # Recrear VC
+            # Paso 2: Limpieza agresiva de memoria y semáforos
+            self._cleanup_memory_and_semaphores()
+            
+            # Paso 3: Forzar garbage collection multiple veces
+            self._force_garbage_collection()
+            
+            # Paso 4: Recrear VC desde cero
             self.vc = VC()
             
-            # Recargar modelo si había uno
+            # Paso 5: Recargar modelo si había uno
             if current_config:
                 self.model_loaded = False  # Reset flag
                 self.load_model(current_config)
@@ -342,6 +352,169 @@ class RVCEngine:
             
         except Exception as e:
             print(f"Error reiniciando motor RVC: {e}")
+            traceback.print_exc()
             # Intentar al menos resetear el contador
             self.conversion_count = 0
             print(f"Error limpiando memoria (no crítico): {e}")
+    
+    def _cleanup_pipeline_completely(self):
+        """
+        Limpia todos los componentes del pipeline RVC de forma exhaustiva.
+        """
+        try:
+            # Limpiar VC y sus componentes
+            if hasattr(self, 'vc') and self.vc:
+                # Limpiar pipeline
+                if hasattr(self.vc, 'pipeline') and self.vc.pipeline:
+                    # Limpiar modelo RMVPE si existe
+                    if hasattr(self.vc.pipeline, 'model_rmvpe'):
+                        del self.vc.pipeline.model_rmvpe
+                    
+                    # Limpiar otros atributos del pipeline
+                    for attr in ['model_rmvpe', 'device', 'is_half']:
+                        if hasattr(self.vc.pipeline, attr):
+                            delattr(self.vc.pipeline, attr)
+                    
+                    del self.vc.pipeline
+                
+                # Limpiar modelo generador
+                if hasattr(self.vc, 'net_g'):
+                    del self.vc.net_g
+                
+                # Limpiar modelo Hubert
+                if hasattr(self.vc, 'hubert_model'):
+                    del self.vc.hubert_model
+                
+                # Limpiar otros atributos
+                for attr in ['cpt', 'tgt_sr', 'n_spk', 'if_f0', 'version']:
+                    if hasattr(self.vc, attr):
+                        delattr(self.vc, attr)
+                        
+        except Exception as e:
+            print(f"Error limpiando pipeline: {e}")
+    
+    def _cleanup_memory_and_semaphores(self):
+        """
+        Limpia memoria y semáforos del sistema para prevenir leaks.
+        """
+        try:
+            # Limpiar caches de torch
+            if torch.backends.mps.is_available():
+                torch.mps.empty_cache()
+                torch.mps.synchronize()
+            elif torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            
+            # Limpiar variables globales que puedan causar leaks
+            import rvc.modules.vc.pipeline as pipeline_module
+            if hasattr(pipeline_module, 'input_audio_path2wav'):
+                pipeline_module.input_audio_path2wav.clear()
+            
+            # Forzar liberación de memoria del sistema
+            if platform.system() == "Darwin":  # macOS
+                # En macOS, forzar liberación de memoria del sistema
+                import ctypes
+                try:
+                    # malloc_zone_trim para liberar memoria al sistema
+                    libc = ctypes.CDLL(None)
+                    libc.malloc_zone_trim(None, 0)
+                except:
+                    pass
+                    
+        except Exception as e:
+            print(f"Error limpiando memoria y semáforos: {e}")
+    
+    def _force_garbage_collection(self):
+        """
+        Fuerza múltiples ciclos de garbage collection para asegurar limpieza completa.
+        """
+        try:
+            import gc
+            
+            # Ejecutar garbage collector múltiples veces
+            # para asegurar que se limpien referencias circulares
+            for i in range(3):
+                collected = gc.collect()
+                if collected > 0:
+                    print(f"GC ciclo {i+1}: {collected} objetos recolectados")
+                
+                # Pequeña pausa para permitir liberación de recursos
+                import time
+                time.sleep(0.01)
+                
+        except Exception as e:
+            print(f"Error en garbage collection: {e}")
+    
+    @contextmanager
+    def _safe_conversion_context(self):
+        """
+        Context manager para conversiones seguras con cleanup automático.
+        """
+        try:
+            yield
+        except Exception as e:
+            print(f"Error en conversión RVC: {e}")
+            # Limpiar todo en caso de error
+            self._cleanup_pipeline_completely()
+            self._cleanup_memory_and_semaphores()
+            self._force_garbage_collection()
+            raise
+    
+    def convert_with_recovery(self, input_wav_path: str, config_override: Optional[RVCConfig] = None, max_retries: int = 2) -> tuple:
+        """
+        Convierte audio con sistema de recuperación automática ante errores.
+        
+        Args:
+            input_wav_path: Ruta al archivo WAV de entrada
+            config_override: Configuración temporal (opcional)
+            max_retries: Número máximo de reintentos en caso de error
+        
+        Returns:
+            Tupla (audio_data, sample_rate)
+        """
+        last_exception = None
+        
+        for attempt in range(max_retries + 1):
+            try:
+                with self._safe_conversion_context():
+                    return self.convert(input_wav_path, config_override)
+                    
+            except Exception as e:
+                last_exception = e
+                print(f"Intento {attempt + 1}/{max_retries + 1} falló: {e}")
+                
+                if attempt < max_retries:
+                    print("Reiniciando motor RVC y reintentando...")
+                    self._restart_engine()
+                    
+                    # Pequeña pausa antes de reintentar
+                    import time
+                    time.sleep(0.5)
+                else:
+                    print("Todos los intentos fallaron")
+        
+        # Si llegamos aquí, todos los intentos fallaron
+        raise last_exception
+    
+    def emergency_cleanup(self):
+        """
+        Limpia emergencia completa - usar cuando el programa está a punto de cerrarse.
+        """
+        try:
+            print("Ejecutando limpieza de emergencia...")
+            
+            # Limpiar todo lo posible
+            self._cleanup_pipeline_completely()
+            self._cleanup_memory_and_semaphores()
+            self._force_garbage_collection()
+            
+            # Limpiar variables de instancia
+            self.vc = None
+            self.config = None
+            self.model_loaded = False
+            
+            print("Limpieza de emergencia completada")
+            
+        except Exception as e:
+            print(f"Error en limpieza de emergencia: {e}")

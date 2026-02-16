@@ -87,7 +87,16 @@ class AudioQueue:
                         self.rvc_engine.config.model_id != voice_profile.rvc_config.model_id):
                         self.rvc_engine.load_model(voice_profile.rvc_config)
                     
-                    converted_wav = self.rvc_engine.convert(neutral_wav)
+                    # Usar el nuevo método con recuperación automática
+                    try:
+                        converted_wav = self.rvc_engine.convert_with_recovery(neutral_wav)
+                    except Exception as e:
+                        print(f"Error crítico en RVC después de reintentos: {e}")
+                        # Como último recurso, usar el audio original sin transformación
+                        import scipy.io.wavfile as wavfile
+                        rate, data = wavfile.read(neutral_wav)
+                        converted_wav = (data.astype('float32') / 32768.0, rate)
+                        print("Usando audio original sin transformación RVC")
                 else:
                     # Sin transformación, leer el WAV generado
                     import scipy.io.wavfile as wavfile
