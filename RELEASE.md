@@ -1,4 +1,4 @@
-# 🚀 Guía para Crear el Release v1.0.0
+# 🚀 Guía para Crear un Release
 
 ## Preparación Pre-Release
 

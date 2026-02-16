@@ -55,20 +55,35 @@ hiddenimports += collect_submodules('fairseq.optim')
 hiddenimports += collect_submodules('fairseq.criterions')
 hiddenimports += collect_submodules('fairseq.logging')
 
+datas = []
 import fairseq
 fairseq_path = os.path.dirname(fairseq.__file__)
 
+# Lista de todas las carpetas internas que fairseq escanea dinámicamente
+fairseq_subfolders = [
+    'criterions', 
+    'models', 
+    'tasks', 
+    'modules', 
+    'optim', 
+    'data', 
+    'dataclass',
+    'scoring',
+    'benchmark'
+]
+
+for folder in fairseq_subfolders:
+    folder_full_path = os.path.join(fairseq_path, folder)
+    if os.path.exists(folder_full_path):
+        # El primer elemento es la ruta real, el segundo es dónde irá en el EXE
+        datas.append((folder_full_path, os.path.join('fairseq', folder)))
+
+# Por si acaso, incluimos cualquier archivo .py suelto en la raíz de fairseq
+datas.append((fairseq_path, 'fairseq'))
 
 # Datos adicionales a incluir
-datas = []
 datas += collect_data_files('edge_tts')
 datas += collect_data_files('librosa')
-
-for folder in ['criterions', 'models', 'tasks', 'modules', 'data']:
-    folder_path = os.path.join(fairseq_path, folder)
-    if os.path.exists(folder_path):
-        datas.append((folder_path, os.path.join('fairseq', folder)))
-
 # Agregar archivos propios del proyecto
 datas += [
     ('assets', 'assets'),
