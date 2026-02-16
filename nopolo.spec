@@ -45,7 +45,15 @@ hiddenimports += collect_submodules('PySide6')
 hiddenimports += collect_submodules('fastapi')
 hiddenimports += collect_submodules('uvicorn')
 hiddenimports += collect_submodules('torch')
+# Incluir todos los submódulos de fairseq y sus dependencias
 hiddenimports += collect_submodules('fairseq')
+hiddenimports += collect_submodules('fairseq.models')
+hiddenimports += collect_submodules('fairseq.data')
+hiddenimports += collect_submodules('fairseq.tasks')
+hiddenimports += collect_submodules('fairseq.modules')
+hiddenimports += collect_submodules('fairseq.optim')
+hiddenimports += collect_submodules('fairseq.criterions')
+hiddenimports += collect_submodules('fairseq.logging')
 
 # Datos adicionales a incluir
 datas = []
