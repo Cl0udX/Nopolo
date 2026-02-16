@@ -106,6 +106,7 @@ def copytree_for_bundle(src, dst):
 copytree_for_bundle('backgrounds', 'backgrounds')
 copytree_for_bundle('voices', 'voices')
 copytree_for_bundle('sounds', 'sounds')
+copytree_for_bundle('overlay', 'overlay')
 
 # Copiar .env a la raíz
 if os.path.exists('.env'):
