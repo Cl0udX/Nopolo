@@ -6,6 +6,7 @@
 
 # Windows (PowerShell como Administrador):
 # pip install git+https://github.com/Tps-F/fairseq.git@main
+# Valida en tu environment que fairseq se haya instalado correctamente con: pip show fairseq
 
 # Linux/macOS:
 # sudo pip install git+https://github.com/Tps-F/fairseq.git@main
