@@ -18,6 +18,7 @@ librosa>=0.10.0
 praat-parselmouth>=0.4.3
 pyworld>=0.3.4
 torchcrepe>=0.0.20
+torchfcpe>=0.0.4  # FCPE pitch estimator: ~3-4x faster than RMVPE on CUDA
 
 # Procesamiento
 numpy>=1.24.0

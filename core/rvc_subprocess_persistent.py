@@ -436,15 +436,21 @@ class PersistentSubprocessProcessor:
                 self._swap_to_next_worker()
             return
 
-        # Worker muerto → crash restart
+        # Worker muerto o nunca arrancado
         self._ready = False
-        self._crash_count += 1
-        if self._crash_count > self.MAX_CRASH_RESTARTS:
-            raise RuntimeError(
-                f"Worker crasheó {self._crash_count} veces consecutivas. Abortando."
-            )
 
-        _tprint(f"[PersistentProcessor] Worker muerto. Crash-restart #{self._crash_count}...")
+        # Determinar si es arranque inicial o crash real
+        is_first_start = (self._process is None)
+
+        if not is_first_start:
+            self._crash_count += 1
+            if self._crash_count > self.MAX_CRASH_RESTARTS:
+                raise RuntimeError(
+                    f"Worker crasheó {self._crash_count} veces consecutivas. Abortando."
+                )
+            _tprint(f"[PersistentProcessor] Worker muerto. Crash-restart #{self._crash_count}...")
+        else:
+            _tprint("[PersistentProcessor] Arranque inicial del worker...")
 
         # Intentar usar el pre-calentado si está listo
         if self._next_process is not None and self._next_ready.is_set():
@@ -543,6 +549,34 @@ class PersistentSubprocessProcessor:
                         os.unlink(output_path)
                 except Exception:
                     pass
+
+    def warmup(self):
+        """
+        Arranca el subprocess en background inmediatamente (sin bloquear).
+        Llamar justo después de crear el procesador para que el worker esté
+        listo cuando llegue la primera solicitud real.
+        """
+        if self._process is not None:
+            return  # ya arrancado
+
+        def _do_warmup():
+            _tprint("[PersistentProcessor] Pre-calentando worker (arranque anticipado)...")
+            q = queue.Queue()
+            p = self._launch_process(q)
+            _tprint(f"[PersistentProcessor] Esperando arranque frío (PID {p.pid})...")
+            if self._wait_for_ready(p, q):
+                with self._lock:
+                    if self._process is None:  # no lo pisamos si ya hay uno
+                        self._process     = p
+                        self._proto_queue = q
+                        self._ready       = True
+                        self._req_count   = 0
+                _tprint(f"[PersistentProcessor] Worker listo (PID {p.pid}).")
+            else:
+                _tprint("[PersistentProcessor] Warmup falló — se reintentará en la primera solicitud.")
+                self._kill_process(p)
+
+        threading.Thread(target=_do_warmup, daemon=True, name="processor-warmup").start()
 
     def shutdown(self):
         """Apaga todos los workers de forma limpia."""

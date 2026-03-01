@@ -17,7 +17,8 @@ from .background_manager import BackgroundManager
 from .audio_filters import AudioFilters
 from .tts_engine import TTSEngine
 from .rvc_engine import RVCEngine
-from .rvc_isolated import RVCIsolatedEngine  # Motor aislado en proceso separado
+from .rvc_isolated import RVCIsolatedEngine  # fallback aislado
+from .rvc_persistent_worker import get_persistent_rvc_engine  # worker persistente
 from .voice_manager import VoiceManager
 
 
@@ -61,6 +62,9 @@ class AdvancedAudioProcessor:
         
         self.parser = MessageParser(default_voice="base_male")
         self.filters = AudioFilters()
+        # Per-voice cached TTS engines (one per voice_id).
+        # Allows parallel synthesis without shared-state collisions.
+        self._tts_engines: dict = {}
     
     def _apply_fade(self, audio: np.ndarray, sr: int, fade_duration: float = 0.15) -> np.ndarray:
         """
@@ -300,6 +304,9 @@ class AdvancedAudioProcessor:
         segments = self.parser.parse(message)
         print(f"{len(segments)} segmentos detectados")
 
+        # ── 2a. Pre-sintetizar todo el TTS en paralelo ───────────────────────
+        pre_tts = self._pre_synthesize_all(segments)
+
         # ── 2. Procesar segmentos (SIN fondos – se mezclan al final) ─────────
         clean_chunks: List[np.ndarray] = []
         # bg_timeline: qué fondo va en qué muestra del audio final
@@ -316,7 +323,8 @@ class AdvancedAudioProcessor:
             try:
                 if segment.type == SegmentType.VOICE:
                     chunk = self._process_voice_segment(segment, target_sr,
-                                                        apply_background=False)
+                                                        apply_background=False,
+                                                        pre_tts_path=pre_tts.get(i))
                 elif segment.type == SegmentType.SOUND:
                     chunk = self._process_sound_segment(segment, target_sr,
                                                         apply_background=False)
@@ -547,15 +555,95 @@ class AdvancedAudioProcessor:
         mixed = np.clip(mixed, -0.99, 0.99)
         return mixed.astype(np.float32)
     
-    def _process_voice_segment(self, segment: MessageSegment, target_sr: int, apply_background: bool = True) -> Optional[np.ndarray]:
+    def _get_tts_engine_for_voice(self, voice_id: str) -> Optional["TTSEngine"]:
+        """
+        Retorna (o crea) un TTSEngine dedicado para este voice_id.
+        Cada voz tiene su propio engine para que la syntheses paralelas
+        no compartan estado.
+        """
+        if voice_id in self._tts_engines:
+            return self._tts_engines[voice_id]
+
+        voice_config = self.voice_manager.get_profile_by_name_or_id(voice_id)
+        if not voice_config or not voice_config.enabled:
+            return None
+
+        cfg = voice_config.tts_config
+        provider = getattr(cfg, 'provider_name', 'edge_tts')
+
+        # TTSEngine creation must be sequential (gRPC init not thread-safe)
+        engine = TTSEngine(config=cfg, provider_name=provider)
+        self._tts_engines[voice_id] = engine
+        return engine
+
+    def _pre_synthesize_all(self, segments: List[MessageSegment]) -> dict:
+        """
+        Pre-sintetiza TTS de todos los segmentos de voz EN PARALELO usando
+        un thread pool (funciona con Edge TTS y Google TTS).
+
+        Engines se crean secuencialmente (gRPC init no es thread-safe) y luego
+        se llama a .synthesize() en paralelo (I/O puro, sin estado compartido).
+
+        Retorna {segment_index: wav_file_path}.
+        """
+        import time
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # 1. Collect segments to synthesize
+        tasks = []  # (segment_idx, voice_id, text)
+        for i, segment in enumerate(segments):
+            if segment.type != SegmentType.VOICE:
+                continue
+            voice_config = self.voice_manager.get_profile_by_name_or_id(segment.voice)
+            if not voice_config or not voice_config.enabled:
+                continue
+            tasks.append((i, segment.voice, segment.content.strip()))
+
+        if not tasks:
+            return {}
+
+        # 2. Ensure one TTSEngine per voice exists (sequential, with gRPC lock)
+        seen_voices = set()
+        for _, voice_id, _ in tasks:
+            if voice_id not in seen_voices:
+                seen_voices.add(voice_id)
+                self._get_tts_engine_for_voice(voice_id)  # creates + caches if new
+
+        # 3. Dispatch synthesis in parallel (I/O bound — threads are fine)
+        def _synth_one(segment_idx, voice_id, text):
+            engine = self._tts_engines.get(voice_id)
+            if engine is None:
+                return segment_idx, None
+            try:
+                # Each engine has its own state — safe to call concurrently
+                wav_path = engine.synthesize(text)
+                return segment_idx, wav_path
+            except Exception as e:
+                print(f"  [TTS-parallel] Error voz '{voice_id}': {e}")
+                return segment_idx, None
+
+        print(f"[TTS-parallel] Sintetizando {len(tasks)} segmento(s) en paralelo...")
+        t0 = time.time()
+        results = {}
+        with ThreadPoolExecutor(max_workers=min(len(tasks), 6)) as pool:
+            futures = {pool.submit(_synth_one, *t): t[0] for t in tasks}
+            for fut in as_completed(futures):
+                idx, path = fut.result()
+                if path:
+                    results[idx] = path
+        print(f"[TTS-parallel] Listo en {time.time() - t0:.2f}s ({len(results)}/{len(tasks)} OK)")
+        return results
+
+    def _process_voice_segment(self, segment: MessageSegment, target_sr: int, apply_background: bool = True, pre_tts_path: Optional[str] = None) -> Optional[np.ndarray]:
         """
         Procesa un segmento de voz (TTS + RVC + Filtros).
-        
+
         Args:
             segment: Segmento de voz
             target_sr: Sample rate objetivo
             apply_background: Si debe aplicar filtros de fondo (False para aplicación global)
-            
+            pre_tts_path: Ruta a un WAV de TTS pre-sintetizado en paralelo (opcional)
+
         Returns:
             Audio procesado o None si falla
         """
@@ -593,24 +681,27 @@ class AdvancedAudioProcessor:
             edge_config = EdgeTTSConfig()
             tts_engine = TTSEngine(config=edge_config, provider_name='edge_tts')
             self.tts_engine = tts_engine  # Guardar referencia para reutilizar
-        
+
         if rvc_engine is None:
-            print("  Creando RVC Engine ISOLATED (primera vez)...")
-            # IMPORTANTE: Usar RVCIsolatedEngine que ejecuta cada conversión
-            # en un proceso separado para evitar heap corruption en Windows
-            rvc_engine = RVCIsolatedEngine()
+            print("  Creando RVC Engine PERSISTENTE (primera vez)...")
+            # Worker persistente: carga Hubert UNA vez y lo mantiene en memoria.
+            # Segunda conversion en adelante solo paga el costo de inferencia (~1-2s).
+            rvc_engine = get_persistent_rvc_engine()
             self.rvc_engine = rvc_engine  # Guardar referencia para reutilizar
-        
+
         try:
             # 1. TTS → Audio neutral
             print("Generando TTS...")
-            
-            # Actualizar config y sintetizar
-            tts_engine.update_config(voice_config.tts_config)
-            
-            # synthesize() retorna la ruta del archivo WAV
-            tts_file_path = tts_engine.synthesize(text)
-            
+
+            if pre_tts_path:
+                # Ya fue sintetizado en paralelo: usar directamente
+                tts_file_path = pre_tts_path
+            else:
+                # Fallback secuencial: usar engine dedicado para esta voz
+                voice_engine = self._get_tts_engine_for_voice(voice_id) or tts_engine
+                voice_engine.update_config(voice_config.tts_config)
+                tts_file_path = voice_engine.synthesize(text)
+
             # Cargar audio TTS
             tts_audio, tts_sr = sf.read(tts_file_path, dtype='float32')
             os.unlink(tts_file_path)  # Limpiar archivo temporal

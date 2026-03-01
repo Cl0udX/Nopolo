@@ -170,6 +170,9 @@ class TTSAPIServer:
             # y luego procesa mensajes en loop → sin overhead de arranque por mensaje.
             # Si crashea (segfault / heap corruption), se reinicia automáticamente.
             processor = PersistentSubprocessProcessor(voice_manager=self.voice_manager)
+            # Arrancar el subprocess AHORA en background, sin esperar la primera solicitud.
+            # Así el worker ya está caliente cuando llega el primer mensaje.
+            processor.warmup()
 
             request_count = 0
             while True:

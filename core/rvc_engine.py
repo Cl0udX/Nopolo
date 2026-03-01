@@ -187,12 +187,17 @@ class RVCEngine:
                 print("Sin index file")
             
             # IMPORTANTE: Detectar plataforma y elegir método F0 apropiado
-            # RMVPE tiene bugs en MPS (Mac), usamos 'pm' (parselmouth) en su lugar
+            # FCPE es ~3-4x más rápido que RMVPE en CUDA (ya usa fp16 si is_half=True)
+            # Fallback: 'pm' en Mac (MPS tiene bugs con RMVPE/FCPE)
             import platform
-            f0_method = "pm" if platform.system() == "Darwin" else "rmvpe"
-            
             if platform.system() == "Darwin":
-                print("Mac detectado - usando 'pm' en lugar de 'rmvpe' (más estable)")
+                f0_method = "pm"
+                print("Mac detectado - usando 'pm' (más estable que RMVPE/FCPE en MPS)")
+            elif torch.cuda.is_available():
+                f0_method = "fcpe"
+            else:
+                f0_method = "rmvpe"  # CPU: rmvpe es más preciso que pm
+            print(f"Método F0: {f0_method}")
             
             # Usar el método vc_inference con keyword arguments para mayor claridad
             tgt_sr, audio_opt, times, _ = self.vc.vc_inference(

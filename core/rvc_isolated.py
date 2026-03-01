@@ -134,8 +134,13 @@ def _rvc_convert_in_process(model_path: str, index_path: str, input_wav_path: st
         import torch
         import platform
         
-        # Detectar método F0
-        f0_method = "pm" if platform.system() == "Darwin" else "rmvpe"
+        # Detectar método F0 (igual que rvc_engine.py)
+        if platform.system() == 'Darwin':
+            f0_method = 'pm'
+        elif torch.cuda.is_available():
+            f0_method = 'fcpe'
+        else:
+            f0_method = 'rmvpe'
         
         # Crear VC
         vc = VC()

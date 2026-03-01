@@ -171,6 +171,32 @@ class Pipeline(object):
                 del self.model_rmvpe
                 logger.info("Cleaning ortruntime memory")
 
+        elif f0_method == "fcpe":
+            # FCPE: Fast Continuous Pitch Estimation (~3-4x faster than RMVPE)
+            # Note: always run in float32 — internal mel_basis buffer is not half-safe
+            if not hasattr(self, "model_fcpe"):
+                import torchfcpe
+                logger.info("Loading FCPE bundled model (faster than RMVPE)")
+                self.model_fcpe = torchfcpe.spawn_bundled_infer_model(device=self.device)
+
+            # Input must be float32 regardless of is_half
+            wav_tensor = torch.FloatTensor(x).unsqueeze(0).to(self.device)
+
+            with torch.no_grad():
+                f0_tensor = self.model_fcpe.infer(
+                    wav_tensor,
+                    sr=self.sr,
+                    decoder_mode="local_argmax",
+                    threshold=0.006,
+                    f0_min=f0_min,
+                    f0_max=f0_max,
+                    output_interp_target_length=p_len,
+                )
+            # shape: (1, p_len, 1) or (1, p_len) → flatten to (p_len,)
+            f0 = f0_tensor.squeeze().cpu().float().numpy()
+            if f0.ndim == 0:
+                f0 = np.array([float(f0)])
+
         f0 *= pow(2, f0_up_key / 12)
         # with open("test.txt","w")as f:f.write("\n".join([str(i)for i in f0.tolist()]))
         tf0 = self.sr // self.window  # 每秒f0点数
