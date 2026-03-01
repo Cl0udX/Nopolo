@@ -8,6 +8,14 @@ import threading
 _current_stream = None
 _stop_flag = False
 _playback_lock = threading.Lock()  # Lock para evitar reproducciones simultáneas
+_volume: float = 1.0  # Volumen global (0.0 – 1.0)
+
+
+def set_volume(vol: float):
+    """Ajusta el volumen global de reproducción (0.0 – 1.0)."""
+    global _volume
+    _volume = max(0.0, min(1.0, float(vol)))
+
 
 def stop_audio():
     """Detiene el audio que está sonando actualmente"""
@@ -39,11 +47,15 @@ def play_wav(wav_tuple):
         if not np.isfinite(data).all():
             print("Advertencia: Audio contiene NaN o infinitos, limpiando...")
             data = np.nan_to_num(data, nan=0.0, posinf=1.0, neginf=-1.0)
-        
+
         # Validar que el audio no esté vacío
         if len(data) == 0:
             print("Advertencia: Audio vacío, saltando reproducción")
             return
+
+        # Aplicar volumen global
+        if _volume != 1.0:
+            data = data * _volume
         
         # Fix para macOS: asegurar que el audio sea mono o estéreo correctamente
         if len(data.shape) == 1:

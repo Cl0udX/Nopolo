@@ -104,17 +104,24 @@ def setup_signal_handlers():
         print("\n" + "="*50)
         print("SEÑAL DE CIERRE RECIBIDA - Ejecutando limpieza de emergencia...")
         print("="*50)
-        
+
         try:
-            # Intentar limpiar el motor RVC si existe
-            from gui.main_window import MainWindow
-            if hasattr(MainWindow, '_instance') and MainWindow._instance:
-                if hasattr(MainWindow._instance, 'audio_queue') and MainWindow._instance.audio_queue:
-                    if hasattr(MainWindow._instance.audio_queue, 'rvc_engine') and MainWindow._instance.audio_queue.rvc_engine:
-                        MainWindow._instance.audio_queue.rvc_engine.emergency_cleanup()
+            # Usar sys.modules para no hacer ningún import nuevo
+            # (si el módulo aún no está cargado, no hacer nada)
+            mw_module = sys.modules.get('gui.main_window')
+            if mw_module is not None:
+                MainWindow = getattr(mw_module, 'MainWindow', None)
+                if MainWindow is not None:
+                    instance = getattr(MainWindow, '_instance', None)
+                    if instance is not None:
+                        aq = getattr(instance, 'audio_queue', None)
+                        if aq is not None:
+                            rvc = getattr(aq, 'rvc_engine', None)
+                            if rvc is not None:
+                                rvc.emergency_cleanup()
         except Exception as e:
             print(f"Error en limpieza de emergencia: {e}")
-        
+
         print("Limpieza completada. Cerrando programa...")
         sys.exit(0)
     

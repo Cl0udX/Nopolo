@@ -288,23 +288,25 @@ class AudioFilters:
             # Recortar si es más largo
             background_final = background_resampled[:audio_length]
         
-        # Normalizar volúmenes
-        audio_normalized = audio / np.max(np.abs(audio)) if np.max(np.abs(audio)) > 0 else audio
-        bg_normalized = background_final / np.max(np.abs(background_final)) if np.max(np.abs(background_final)) > 0 else background_final
-        
-        # Mezclar con volúmenes apropiados
-        # Audio principal más alto, fondo más bajo
-        mixed = audio_normalized * 0.8 + bg_normalized * background_volume
-        
-        # Normalizar resultado final para evitar clipping
-        if np.max(np.abs(mixed)) > 0:
-            mixed = mixed / np.max(np.abs(mixed)) * 0.95
-        
-        # Validar que el resultado sea finito
+        # Normalizar el fondo a peak 1.0, luego escalar con background_volume
+        # relativo al nivel del audio principal.
+        # NO re-normalizar el mix final: eso destruiría el volumen configurado.
+        audio_peak = np.max(np.abs(audio)) if np.max(np.abs(audio)) > 0 else 1.0
+        bg_peak    = np.max(np.abs(background_final)) if np.max(np.abs(background_final)) > 0 else 1.0
+
+        # El fondo suena a `background_volume` del nivel de la voz
+        bg_scaled = background_final / bg_peak * audio_peak * background_volume
+
+        mixed = audio + bg_scaled
+
+        # Clip suave para evitar distorsión (sin re-normalizar)
+        mixed = np.clip(mixed, -0.99, 0.99)
+
+        # Validar
         if not np.isfinite(mixed).all():
             print("Audio mezclado contiene valores inválidos, limpiando...")
-            mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.95, neginf=-0.95)
-        
+            mixed = np.nan_to_num(mixed, nan=0.0, posinf=0.99, neginf=-0.99)
+
         return mixed.astype(np.float32)
     
     @classmethod

@@ -6,9 +6,9 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, 
     QLabel, QGroupBox, QListWidget, QCheckBox, QTableWidget,
     QTableWidgetItem, QHeaderView, QTabWidget, QSplitter, QTextEdit,
-    QLineEdit
+    QLineEdit, QSlider
 )
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, QThread, QMetaObject, Q_ARG
 from PySide6.QtGui import QFont, QPixmap, QCursor, QDesktopServices
 import sys
 import os
@@ -21,17 +21,27 @@ class ConsoleRedirector:
         self.terminal = sys.__stdout__  # Mantener referencia a terminal original
     
     def write(self, text):
-        """Escribe en la consola y en la terminal"""
+        """Escribe en la consola y en la terminal (thread-safe)"""
         if text.strip():  # Ignorar líneas vacías
-            # Escribir en consola GUI
-            self.console_widget.append(text.rstrip())
-            # Auto-scroll
-            scrollbar = self.console_widget.verticalScrollBar()
-            scrollbar.setValue(scrollbar.maximum())
-            
-            # También escribir en terminal
+            # Siempre escribir a la terminal real (seguro desde cualquier hilo)
             self.terminal.write(text)
             self.terminal.flush()
+
+            # Actualizar el widget Qt solo desde el hilo principal
+            from PySide6.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app and QThread.currentThread() is app.thread():
+                self.console_widget.append(text.rstrip())
+                scrollbar = self.console_widget.verticalScrollBar()
+                scrollbar.setValue(scrollbar.maximum())
+            else:
+                # Encolar la actualización en el hilo principal (no bloqueante)
+                QMetaObject.invokeMethod(
+                    self.console_widget,
+                    "append",
+                    Qt.ConnectionType.QueuedConnection,
+                    Q_ARG(str, text.rstrip())
+                )
     
     def flush(self):
         """Flush para compatibilidad"""
@@ -268,12 +278,27 @@ class UIBuilderMixin:
         self.stop_audio_btn = QPushButton("⏹ Silenciar")
         self.stop_audio_btn.clicked.connect(self._stop_audio)
         playback_layout.addWidget(self.stop_audio_btn)
-        
+
         # Botón siguiente
         self.next_audio_btn = QPushButton("⏭ Siguiente")
         self.next_audio_btn.clicked.connect(self._skip_audio)
         playback_layout.addWidget(self.next_audio_btn)
-        
+
+        # Slider de volumen
+        vol_row = QHBoxLayout()
+        vol_icon = QLabel("🔊")
+        self.volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.volume_slider.setRange(0, 100)
+        self.volume_slider.setValue(100)
+        self.volume_slider.setToolTip("Volumen de reproducción (0 – 100%)")
+        self.volume_pct_label = QLabel("100%")
+        self.volume_pct_label.setMinimumWidth(38)
+        self.volume_slider.valueChanged.connect(self._on_volume_changed)
+        vol_row.addWidget(vol_icon)
+        vol_row.addWidget(self.volume_slider)
+        vol_row.addWidget(self.volume_pct_label)
+        playback_layout.addLayout(vol_row)
+
         playback_group.setLayout(playback_layout)
         panel.addWidget(playback_group)
         
