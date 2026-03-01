@@ -2,12 +2,18 @@
 Motor TTS principal que usa providers intercambiables.
 Ahora soporta múltiples engines (Edge, Google, etc.)
 """
+import threading
 from typing import Optional
 from .models import EdgeTTSConfig
 from .tts import TTSProviderFactory
 
 
 from core.provider_manager import ProviderManager
+
+# Lock global para serializar la creación de providers TTS.
+# gRPC (Google TTS) usa OpenSSL que NO es re-entrante si se inicializa
+# desde múltiples threads al mismo tiempo en Windows → heap corruption.
+_PROVIDER_CREATION_LOCK = threading.Lock()
 
 class TTSEngine:
     def __init__(self, config: Optional[EdgeTTSConfig] = None, provider_name: str = None):
@@ -29,26 +35,29 @@ class TTSEngine:
         credentials_path = self.provider_manager.get_provider_credentials(self.provider_name)
         
         # Crear provider según tipo
-        if self.provider_name == "google_tts":
-            from core.tts.google_provider import GoogleTTSConfig
-            
-            # Extraer language_code del voice_id
-            voice_id = config.voice_id
-            language_code = "-".join(voice_id.split("-")[:2]) if "-" in voice_id else "es-US"
-            
-            # Crear config de Google con credenciales
-            google_config = GoogleTTSConfig(
-                voice_id=voice_id,
-                language_code=language_code,
-                rate=getattr(config, 'rate', '+0%'),
-                volume=getattr(config, 'volume_str', '+0%'),
-                pitch=getattr(config, 'pitch', 0),
-                credentials_path=credentials_path
-            )
-            self.provider = TTSProviderFactory.create("google_tts", google_config)
-        else:
-            # Edge TTS (default)
-            self.provider = TTSProviderFactory.create("edge_tts", config)
+        # NOTA: _PROVIDER_CREATION_LOCK evita inicializaciones concurrentes
+        # de gRPC (Google TTS) que causan heap corruption en Windows.
+        with _PROVIDER_CREATION_LOCK:
+            if self.provider_name == "google_tts":
+                from core.tts.google_provider import GoogleTTSConfig
+
+                # Extraer language_code del voice_id
+                voice_id = config.voice_id
+                language_code = "-".join(voice_id.split("-")[:2]) if "-" in voice_id else "es-US"
+
+                # Crear config de Google con credenciales
+                google_config = GoogleTTSConfig(
+                    voice_id=voice_id,
+                    language_code=language_code,
+                    rate=getattr(config, 'rate', '+0%'),
+                    volume=getattr(config, 'volume_str', '+0%'),
+                    pitch=getattr(config, 'pitch', 0),
+                    credentials_path=credentials_path
+                )
+                self.provider = TTSProviderFactory.create("google_tts", google_config)
+            else:
+                # Edge TTS (default)
+                self.provider = TTSProviderFactory.create("edge_tts", config)
     
     def update_config(self, config):
         """Actualiza la configuración y cambia de provider si es necesario"""
@@ -76,12 +85,13 @@ class TTSEngine:
             if not credentials_path:
                 print("Google Cloud TTS no configurado, cambiando a Edge TTS")
                 new_provider_name = "edge_tts"
-                # Crear provider de Edge TTS
-                if new_provider_name != current_provider_name:
-                    print(f"Cambiando provider: {current_provider_name} → {new_provider_name}")
-                    self.provider = TTSProviderFactory.create("edge_tts", config)
-                else:
-                    self.provider.update_config(config)
+                # Crear provider de Edge TTS (con lock para thread-safety)
+                with _PROVIDER_CREATION_LOCK:
+                    if new_provider_name != current_provider_name:
+                        print(f"Cambiando provider: {current_provider_name} -> {new_provider_name}")
+                        self.provider = TTSProviderFactory.create("edge_tts", config)
+                    else:
+                        self.provider.update_config(config)
                 return
             
             # Extraer language_code del voice_id
@@ -100,21 +110,23 @@ class TTSEngine:
             )
             
             # Cambiar provider o actualizar config
-            if new_provider_name != current_provider_name:
-                print(f"Cambiando provider: {current_provider_name} → {new_provider_name}")
-                self.provider = TTSProviderFactory.create("google_tts", google_config)
-            else:
-                # Mismo provider, actualizar con GoogleTTSConfig (NO EdgeTTSConfig)
-                self.provider.update_config(google_config)
-        
+            with _PROVIDER_CREATION_LOCK:
+                if new_provider_name != current_provider_name:
+                    print(f"Cambiando provider: {current_provider_name} -> {new_provider_name}")
+                    self.provider = TTSProviderFactory.create("google_tts", google_config)
+                else:
+                    # Mismo provider, actualizar con GoogleTTSConfig (NO EdgeTTSConfig)
+                    self.provider.update_config(google_config)
+
         else:
             # Edge TTS
-            if new_provider_name != current_provider_name:
-                print(f"Cambiando provider: {current_provider_name} → {new_provider_name}")
-                self.provider = TTSProviderFactory.create("edge_tts", config)
-            else:
-                # Mismo provider, actualizar config
-                self.provider.update_config(config)
+            with _PROVIDER_CREATION_LOCK:
+                if new_provider_name != current_provider_name:
+                    print(f"Cambiando provider: {current_provider_name} -> {new_provider_name}")
+                    self.provider = TTSProviderFactory.create("edge_tts", config)
+                else:
+                    # Mismo provider, actualizar config
+                    self.provider.update_config(config)
     
     def synthesize(self, text: str, config_override=None) -> str:
         """

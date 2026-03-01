@@ -17,6 +17,7 @@ from .background_manager import BackgroundManager
 from .audio_filters import AudioFilters
 from .tts_engine import TTSEngine
 from .rvc_engine import RVCEngine
+from .rvc_isolated import RVCIsolatedEngine  # Motor aislado en proceso separado
 from .voice_manager import VoiceManager
 
 
@@ -435,16 +436,38 @@ class AdvancedAudioProcessor:
             print(f"Voz deshabilitada: {voice_id}")
             return None
         
+        # USAR TTS y RVC compartidos (no crear nuevos por solicitud)
+        # Crear nuevos engines causa heap corruption en Windows (0xc0000374)
+        # porque los modelos Hubert/RMVPE no se liberan correctamente
+        tts_engine = self.tts_engine
+        rvc_engine = self.rvc_engine
+        
+        # Solo crear si realmente no existe (primera vez)
+        if tts_engine is None:
+            print("  Creando TTS Engine (primera vez)...")
+            # IMPORTANTE: Forzar Edge TTS porque Google Cloud TTS usa gRPC
+            # que NO es thread-safe y causa heap corruption en Windows
+            from .models import EdgeTTSConfig
+            edge_config = EdgeTTSConfig()
+            tts_engine = TTSEngine(config=edge_config, provider_name='edge_tts')
+            self.tts_engine = tts_engine  # Guardar referencia para reutilizar
+        
+        if rvc_engine is None:
+            print("  Creando RVC Engine ISOLATED (primera vez)...")
+            # IMPORTANTE: Usar RVCIsolatedEngine que ejecuta cada conversión
+            # en un proceso separado para evitar heap corruption en Windows
+            rvc_engine = RVCIsolatedEngine()
+            self.rvc_engine = rvc_engine  # Guardar referencia para reutilizar
+        
         try:
             # 1. TTS → Audio neutral
             print("Generando TTS...")
             
-            # Debug: verificar tipo de tts_config
             # Actualizar config y sintetizar
-            self.tts_engine.update_config(voice_config.tts_config)
+            tts_engine.update_config(voice_config.tts_config)
             
             # synthesize() retorna la ruta del archivo WAV
-            tts_file_path = self.tts_engine.synthesize(text)
+            tts_file_path = tts_engine.synthesize(text)
             
             # Cargar audio TTS
             tts_audio, tts_sr = sf.read(tts_file_path, dtype='float32')
@@ -461,10 +484,10 @@ class AdvancedAudioProcessor:
                     sf.write(rvc_input_file.name, tts_audio, tts_sr)
                     
                     # Cargar modelo RVC si es necesario
-                    self.rvc_engine.load_model(voice_config.rvc_config)
+                    rvc_engine.load_model(voice_config.rvc_config)
                     
                     # Convertir con protección contra segfaults
-                    rvc_audio, rvc_sr = self.rvc_engine.convert(rvc_input_file.name)
+                    rvc_audio, rvc_sr = rvc_engine.convert(rvc_input_file.name)
                     
                     # Limpiar (puede que RVC ya lo haya eliminado)
                     try:
@@ -539,7 +562,7 @@ class AdvancedAudioProcessor:
             
             # 4. Resample si es necesario
             if final_sr != target_sr:
-                print(f"  4. Resampling {final_sr} → {target_sr} Hz")
+                print(f"  4. Resampling {final_sr} -> {target_sr} Hz")
                 from scipy import signal
                 num_samples = int(len(final_audio) * target_sr / final_sr)
                 final_audio = signal.resample(final_audio, num_samples)

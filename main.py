@@ -1,6 +1,46 @@
 # main.py
 import sys
 import os
+
+# ============================================================
+# IMPORTANTE: Protección para multiprocessing en Windows
+# Esto DEBE ir antes que cualquier otro import
+# ============================================================
+import multiprocessing
+if sys.platform == 'win32':
+    multiprocessing.freeze_support()
+
+# ============================================================
+# DIAGNÓSTICO: Activar faulthandler para capturar crashes
+# ============================================================
+import faulthandler
+import logging
+import traceback
+
+# Activar faulthandler para ver dónde crashea
+faulthandler.enable()
+
+# Logging detallado
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('nopolo_debug.log', encoding='utf-8', mode='w'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+# Hook para excepciones no manejadas
+def exception_hook(exc_type, exc_value, exc_traceback):
+    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+    
+sys.excepthook = exception_hook
+
+logging.info("=" * 60)
+logging.info("NOPOLO TTS - INICIANDO CON DIAGNÓSTICO")
+logging.info("=" * 60)
+
 import builtins
 if not hasattr(builtins, 'help'):
     def help_placeholder(*args, **kwargs):

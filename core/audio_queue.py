@@ -1,5 +1,6 @@
 import threading
 import queue
+import gc
 from typing import Optional
 from .tts_engine import TTSEngine
 from .rvc_engine import RVCEngine
@@ -73,38 +74,52 @@ class AudioQueue:
                 overlay_mgr = get_overlay_manager()
                 overlay_mgr.show(text, display_name, is_nopolo=False)
                 
-                # Paso 1: TTS (voz neutral)
-                if voice_profile and voice_profile.tts_config:
-                    # Actualizar config del engine (esto cambia provider si es necesario)
-                    self.tts_engine.update_config(voice_profile.tts_config)
-                
-                neutral_wav = self.tts_engine.synthesize(text)
-                
-                # Paso 2: RVC (transformación opcional)
-                if voice_profile and voice_profile.is_transformer_voice():
-                    # Cargar modelo si es diferente
-                    if (not self.rvc_engine.model_loaded or 
-                        self.rvc_engine.config.model_id != voice_profile.rvc_config.model_id):
-                        self.rvc_engine.load_model(voice_profile.rvc_config)
+                # ── Protección GC ─────────────────────────────────────────────
+                # Desactivar GC durante las operaciones nativas (TTS/RVC).
+                # Evita que el recolector de Python dispare finalizadores de
+                # objetos nativos (gRPC, PyTorch, FAISS) en mal momento,
+                # reduciendo la frecuencia de heap corruption (0xc0000374).
+                gc.disable()
+                try:
+                    # Paso 1: TTS (voz neutral)
+                    if voice_profile and voice_profile.tts_config:
+                        # update_config puede crear un nuevo provider (ej. Google TTS).
+                        # El lock en TTSEngine serializa la inicialización de gRPC.
+                        self.tts_engine.update_config(voice_profile.tts_config)
                     
-                    # Usar el nuevo método con recuperación automática
-                    try:
-                        converted_wav = self.rvc_engine.convert_with_recovery(neutral_wav)
-                    except Exception as e:
-                        print(f"Error crítico en RVC después de reintentos: {e}")
-                        # Como último recurso, usar el audio original sin transformación
+                    neutral_wav = self.tts_engine.synthesize(text)
+                    
+                    # Paso 2: RVC (transformación opcional)
+                    if voice_profile and voice_profile.is_transformer_voice():
+                        # Cargar modelo si es diferente
+                        if (not self.rvc_engine.model_loaded or 
+                            self.rvc_engine.config.model_id != voice_profile.rvc_config.model_id):
+                            self.rvc_engine.load_model(voice_profile.rvc_config)
+                        
+                        # Usar el nuevo método con recuperación automática
+                        try:
+                            converted_wav = self.rvc_engine.convert_with_recovery(neutral_wav)
+                        except Exception as e:
+                            print(f"Error crítico en RVC después de reintentos: {e}")
+                            # Como último recurso, usar el audio original sin transformación
+                            import scipy.io.wavfile as wavfile
+                            rate, data = wavfile.read(neutral_wav)
+                            converted_wav = (data.astype('float32') / 32768.0, rate)
+                            print("Usando audio original sin transformación RVC")
+                    else:
+                        # Sin transformación, leer el WAV generado
                         import scipy.io.wavfile as wavfile
                         rate, data = wavfile.read(neutral_wav)
                         converted_wav = (data.astype('float32') / 32768.0, rate)
-                        print("Usando audio original sin transformación RVC")
-                else:
-                    # Sin transformación, leer el WAV generado
-                    import scipy.io.wavfile as wavfile
-                    rate, data = wavfile.read(neutral_wav)
-                    converted_wav = (data.astype('float32') / 32768.0, rate)
-                    import os
-                    os.unlink(neutral_wav)  # Limpiar temporal
-                
+                        import os
+                        os.unlink(neutral_wav)  # Limpiar temporal
+
+                finally:
+                    # Re-activar GC y hacer collect mientras no hay operaciones nativas
+                    gc.enable()
+                    gc.collect()
+                # ── Fin protección GC ──────────────────────────────────────────
+
                 # Paso 3: Reproducir
                 play_wav(converted_wav)
                 
@@ -116,5 +131,13 @@ class AudioQueue:
                 print(f"Error en cola de audio: {e}")
                 import traceback
                 traceback.print_exc()
+                try:
+                    overlay_mgr = get_overlay_manager()
+                    overlay_mgr.hide()
+                except Exception:
+                    pass
+                # Re-activar GC si quedó desactivado por un crash
+                if not gc.isenabled():
+                    gc.enable()
             finally:
                 self.queue.task_done()

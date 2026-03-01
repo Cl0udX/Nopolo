@@ -62,11 +62,10 @@ class RVCEngine:
         
         # Contador de conversiones para prevenir memory leaks
         self.conversion_count = 0
-        # Configuración recomendada: 5 conversiones antes de reiniciar
-        # - 3: Máxima seguridad (uso ligero)
-        # - 5: Balance óptimo (uso normal) 
-        # - 10: Uso intensivo (mayor rendimiento)
-        self.max_conversions_before_restart = 5
+        # DESACTIVADO: El reinicio del motor causa heap corruption en Windows
+        # porque los modelos Hubert/RMVPE son globales y no se liberan correctamente
+        # La limpieza de memoria CUDA es suficiente para preencer leaks
+        self.max_conversions_before_restart = 999999  # Prácticamente desactivado
 
         # Cargar modelo si se proporcionó config
         if config:
