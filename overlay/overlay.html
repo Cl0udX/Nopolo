@@ -7,233 +7,155 @@
     <link rel="stylesheet" href="/static/overlay.css">
 </head>
 <body>
-    <div id="tts-container" class="hidden">
-        <div id="voice-label"></div>
-        <div id="text-content"></div>
+    <div id="overlay-wrapper" class="hidden">
+
+        <!-- ── Cabecera de marca (FUERA del recuadro) ─────────── -->
+        <div id="brand-header">
+            <img id="brand-logo" src="" alt="Logo" />
+            <span id="brand-creator"></span>
+        </div>
+
+        <!-- ── Cuadro de texto ────────────────────────────────── -->
+        <div id="tts-container">
+
+            <!-- ── Texto principal ──────────────────────────────── -->
+            <div id="text-content"></div>
+
+        </div>
+
     </div>
 
     <script>
-        // Configuración (se puede modificar desde parámetros URL)
-        const urlParams = new URLSearchParams(window.location.search);
-        const showMode = urlParams.get('mode') || 'normal'; // normal, nopolo, voice
-        const wsPort = urlParams.get('port') || '8765';
+        // ── Parámetros URL ──────────────────────────────────────────────────
+        const urlParams   = new URLSearchParams(window.location.search);
+        const wsPort      = urlParams.get('port') || '8765';
+        const logoSrc     = urlParams.get('logo') || '/assets/nopolo_icon.png';
+
+        // ── Aplicar marca ───────────────────────────────────────────────────
+        const brandLogo    = document.getElementById('brand-logo');
+        const brandCreator = document.getElementById('brand-creator');
+        brandLogo.src = logoSrc;
+        brandLogo.onerror = () => { brandLogo.style.display = 'none'; };
+
+        // ── Referencias DOM ─────────────────────────────────────────────────
+        const container  = document.getElementById('overlay-wrapper');
+        const textContent= document.getElementById('text-content');
         
-        // Elementos del DOM
-        const container = document.getElementById('tts-container');
-        const voiceLabel = document.getElementById('voice-label');
-        const textContent = document.getElementById('text-content');
-        
-        // Conexión WebSocket
-        let ws;
-        let reconnectInterval = null;
-        let hideTimeout = null;
-        let isConnecting = false;
+        // ── Estado WebSocket ────────────────────────────────────────────────
+        let ws                = null;
+        let reconnectTimeout  = null;
+        let pingInterval      = null;
+        let hideTimeout       = null;
+        let isConnecting      = false;
         let reconnectAttempts = 0;
-        let maxReconnectDelay = 30000; // Máximo 30 segundos
-        let pingInterval = null; // Intervalo para mantener conexión viva
-        
+
         function connect() {
-            // Evitar múltiples conexiones simultáneas
-            if (isConnecting) {
-                console.log('⏳ Ya hay una conexión en proceso...');
-                return;
-            }
-            
-            // Limpiar intervalo de reconexión anterior
-            if (reconnectInterval) {
-                clearInterval(reconnectInterval);
-                reconnectInterval = null;
-            }
-            
-            // Limpiar intervalo de ping anterior
-            if (pingInterval) {
-                clearInterval(pingInterval);
-                pingInterval = null;
-            }
-            
-            // Cerrar conexión anterior si existe
+            if (isConnecting) return;
+            if (reconnectTimeout) { clearTimeout(reconnectTimeout);  reconnectTimeout = null; }
+            if (pingInterval)     { clearInterval(pingInterval);     pingInterval = null; }
             if (ws) {
-                ws.onclose = null; // Evitar que dispare reconexión
-                ws.onerror = null;
-                ws.onmessage = null;
-                try {
-                    ws.close();
-                } catch (e) {
-                    console.log('Error cerrando WebSocket anterior:', e);
-                }
+                ws.onclose = null; ws.onerror = null; ws.onmessage = null;
+                try { ws.close(); } catch(e) {}
                 ws = null;
             }
-            
+
             isConnecting = true;
-            console.log(`🔄 Conectando al servidor (intento ${reconnectAttempts + 1})...`);
-            
+            console.log(`🔄 Conectando… (intento ${reconnectAttempts + 1})`);
+
             try {
                 ws = new WebSocket(`ws://localhost:${wsPort}/ws`);
-                
+
                 ws.onopen = () => {
-                    console.log('✅ Conectado al servidor Nopolo TTS');
+                    console.log('✅ Conectado a Nopolo TTS');
                     isConnecting = false;
-                    reconnectAttempts = 0; // Reset contador
-                    if (reconnectInterval) {
-                        clearInterval(reconnectInterval);
-                        reconnectInterval = null;
-                    }
-                    
-                    // Iniciar ping periódico para mantener conexión viva
+                    reconnectAttempts = 0;
                     pingInterval = setInterval(() => {
                         if (ws && ws.readyState === WebSocket.OPEN) {
-                            try {
-                                ws.send(JSON.stringify({ type: 'ping' }));
-                                console.log('💓 Ping enviado');
-                            } catch (e) {
-                                console.error('Error enviando ping:', e);
-                            }
+                            try { ws.send(JSON.stringify({ type: 'ping' })); }
+                            catch(e) { console.error('Ping error:', e); }
                         }
-                    }, 25000); // Cada 25 segundos (antes del timeout de 30s del servidor)
+                    }, 25000);
                 };
-                
+
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data);
-                    if (data.type === 'pong') {
-                        console.log('💓 Pong recibido');
-                        return;
-                    }
+                    if (data.type === 'pong') return;
                     handleMessage(data);
                 };
-                
-                ws.onerror = (error) => {
-                    console.error('❌ WebSocket error:', error);
+
+                ws.onerror  = () => { isConnecting = false; };
+                ws.onclose  = () => {
                     isConnecting = false;
+                    if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+                    reconnectAttempts++;
+                    const delay = Math.min(3000 * Math.pow(2, reconnectAttempts - 1), 30000);
+                    console.log(`⏰ Reconectando en ${delay/1000}s…`);
+                    reconnectTimeout = setTimeout(() => { reconnectTimeout = null; connect(); }, delay);
                 };
-                
-                ws.onclose = (event) => {
-                    console.log('🔌 Desconectado del servidor', event.code, event.reason);
-                    isConnecting = false;
-                    
-                    // Limpiar ping interval
-                    if (pingInterval) {
-                        clearInterval(pingInterval);
-                        pingInterval = null;
-                    }
-                    
-                    // Solo reconectar si no hay ya un intervalo activo
-                    if (!reconnectInterval) {
-                        // Backoff exponencial: 3s, 6s, 12s, 24s, 30s (max)
-                        reconnectAttempts++;
-                        const delay = Math.min(3000 * Math.pow(2, reconnectAttempts - 1), maxReconnectDelay);
-                        console.log(`⏰ Reconectando en ${delay / 1000} segundos...`);
-                        
-                        reconnectInterval = setTimeout(() => {
-                            reconnectInterval = null;
-                            connect();
-                        }, delay);
-                    }
-                };
-            } catch (error) {
-                console.error('❌ Error al crear WebSocket:', error);
+
+            } catch(e) {
+                console.error('Error creando WebSocket:', e);
                 isConnecting = false;
             }
         }
-        
-        // Cleanup al cerrar la página
+
         window.addEventListener('beforeunload', () => {
-            if (reconnectInterval) {
-                clearTimeout(reconnectInterval);
-            }
-            if (pingInterval) {
-                clearInterval(pingInterval);
-            }
-            if (ws) {
-                ws.close();
-            }
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            if (pingInterval)     clearInterval(pingInterval);
+            if (ws) ws.close();
         });
-        
+
+        // ── Manejo de mensajes ──────────────────────────────────────────────
         function handleMessage(data) {
             if (data.type === 'tts_start') {
-                // Cancelar cualquier timeout de ocultación pendiente
-                if (hideTimeout) {
-                    clearTimeout(hideTimeout);
-                    hideTimeout = null;
-                }
+                if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
                 showTTS(data.text, data.voice, data.is_nopolo || false);
             } else if (data.type === 'tts_stop') {
                 hideTTS();
             }
         }
-        
+
         function showTTS(text, voice, isNopolo) {
-            console.log(`📺 Mostrando TTS: is_nopolo=${isNopolo}, voice="${voice}", text="${text.substring(0, 50)}..."`);
-            
-            // Limpiar contenido anterior
-            voiceLabel.textContent = '';
             textContent.innerHTML = '';
-            
-            // Mostrar nombre de voz si está disponible
-            if (voice) {
-                voiceLabel.textContent = voice;
-                voiceLabel.style.display = 'block';
-            } else {
-                voiceLabel.style.display = 'none';
-            }
-            
-            // Mostrar texto según si es Nopolo o no
-            if (isNopolo) {
-                console.log('✨ Modo Nopolo: resaltando sintaxis');
-                // Modo Nopolo: resaltar sintaxis con colores
-                textContent.innerHTML = highlightNopoloSyntax(text);
-            } else {
-                console.log('📝 Modo Normal: mostrando texto completo sin colores');
-                // Modo normal: mostrar texto completo tal cual, sin colores
-                textContent.textContent = text;
-            }
-            
-            // Mostrar container con animación
+
+            // Mostrar nombre del hablante en la cabecera grande
+            brandCreator.textContent = voice || '';
+
+            textContent.innerHTML = isNopolo
+                ? highlightNopoloSyntax(text)
+                : escapeHtml(text);
+
             container.classList.remove('hidden', 'hiding');
             container.classList.add('show');
         }
-        
+
         function hideTTS() {
-            console.log('🚫 Ocultando overlay');
-            
-            // Ocultar con animación
             container.classList.remove('show');
             container.classList.add('hiding');
-            
             hideTimeout = setTimeout(() => {
                 container.classList.remove('hiding');
                 container.classList.add('hidden');
+                brandCreator.textContent = '';
                 hideTimeout = null;
-            }, 500); // Duración de la animación de salida
+            }, 450);
         }
-        
-        function cleanNopoloSyntax(text) {
-            // Remover sintaxis Nopolo para mostrar solo el texto limpio
-            // Remover voces: "voz:" o "voz.filtro:"
-            text = text.replace(/\w+(\.\w+)?:\s*/g, '');
-            // Remover sonidos: "(sonido)" o "(sonido.filtro)"
-            text = text.replace(/\([^)]+\)/g, '');
-            return text.trim();
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
         }
-        
+
         function highlightNopoloSyntax(text) {
-            // Resaltar sintaxis Nopolo con colores
-            let highlighted = text;
-            
-            // Resaltar voces: voz: o voz.filtro:
-            highlighted = highlighted.replace(/(\w+(\.\w+)?:)/g, '<span class="voice">$1</span>');
-            
-            // Resaltar sonidos: (sonido) o (sonido.filtro)
-            highlighted = highlighted.replace(/(\([^)]+\))/g, '<span class="sound">$1</span>');
-            
-            return highlighted;
+            let h = escapeHtml(text);
+            h = h.replace(/(\w+(\.\w+)?:)/g,  '<span class="voice">$1</span>');
+            h = h.replace(/(\([^)]+\))/g,      '<span class="sound">$1</span>');
+            return h;
         }
-        
-        // Conectar al iniciar
+
         connect();
-        
-        // Mensaje de conexión para debugging
-        console.log('🎙️ Nopolo TTS Overlay iniciado');
-        console.log(`📺 Modo: ${showMode}`);
+        console.log('🎙️ Nopolo TTS Overlay — PostInCloud');
         console.log(`🔌 WebSocket: ws://localhost:${wsPort}/ws`);
     </script>
 </body>

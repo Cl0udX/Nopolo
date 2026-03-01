@@ -104,9 +104,9 @@ class OverlayMixin:
             self._update_overlay_url()
     
     def _update_overlay_url(self):
-        # URL siempre la misma, los filtros se manejan en el backend
-        url = f"http://localhost:8765/overlay"
-        self.overlay_url_field.setText(url)
+        if not self.overlay_server_running:
+            return
+        self.overlay_url_field.setText('http://localhost:8765/overlay')
     
     def _toggle_overlay_server(self):
         if self.overlay_server_running:
