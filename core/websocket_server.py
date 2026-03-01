@@ -30,6 +30,7 @@ class WebSocketServer:
         self.app.router.add_get('/ws', self.websocket_handler)
         self.app.router.add_get('/overlay', self.overlay_handler)
         self.app.router.add_static('/static', './overlay', name='static')
+        self.app.router.add_static('/assets', './assets', name='assets')
     
     async def start(self):
         """Inicia el servidor WebSocket"""

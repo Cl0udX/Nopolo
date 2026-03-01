@@ -17,6 +17,7 @@ from .background_manager import BackgroundManager
 from .audio_filters import AudioFilters
 from .tts_engine import TTSEngine
 from .rvc_engine import RVCEngine
+from .rvc_isolated import RVCIsolatedEngine  # Motor aislado en proceso separado
 from .voice_manager import VoiceManager
 
 
@@ -281,128 +282,270 @@ class AdvancedAudioProcessor:
     def process_message(self, message: str, target_sr: int = 16000) -> Tuple[np.ndarray, int]:
         """
         Procesa un mensaje complejo y genera audio.
-        
-        Args:
-            message: Mensaje con formato Mopolo
-            target_sr: Sample rate de salida
-            
-        Returns:
-            Tupla (audio_data, sample_rate)
-            
-        Ejemplo:
-            >>> processor = AdvancedAudioProcessor(...)
-            >>> audio, sr = processor.process_message("dross: hola (disparo) homero: doh!")
+
+        Pipeline:
+          1. Parsear segmentos
+          2. Procesar cada segmento SIN fondo (audio limpio)
+          3. Concatenar con crossfade corto de 60ms (solo elimina clicks)
+          4. Superponer capa de fondo continua (respetando volumen del JSON)
+          5. Fade global de 120ms solo en los extremos del audio completo
+          6. Normalizar
         """
+        import gc
+        import traceback
+
         print(f"Procesando mensaje: '{message}'")
-        
-        # 1. Parsear mensaje
+
+        # ── 1. Parsear ────────────────────────────────────────────────────────
         segments = self.parser.parse(message)
         print(f"{len(segments)} segmentos detectados")
-        
-        # 2. Procesar cada segmento (fondos son LOCALES a cada segmento)
-        audio_chunks = []
-        segment_metadata = []  # Guardar metadata de cada segmento para crossfade
-        
+
+        # ── 2. Procesar segmentos (SIN fondos – se mezclan al final) ─────────
+        clean_chunks: List[np.ndarray] = []
+        # bg_timeline: qué fondo va en qué muestra del audio final
+        # {bg_id, start_sample, end_sample}
+        bg_timeline: List[dict] = []
+        current_sample = 0
+
         for i, segment in enumerate(segments):
             print(f"\n{'='*50}")
             print(f"Segmento {i+1}/{len(segments)}: {segment.type.value}")
             print(f"{'='*50}")
-            
+
+            chunk = None
             try:
                 if segment.type == SegmentType.VOICE:
-                    chunk = self._process_voice_segment(segment, target_sr, apply_background=True)
+                    chunk = self._process_voice_segment(segment, target_sr,
+                                                        apply_background=False)
                 elif segment.type == SegmentType.SOUND:
-                    chunk = self._process_sound_segment(segment, target_sr, apply_background=True)
+                    chunk = self._process_sound_segment(segment, target_sr,
+                                                        apply_background=False)
                 else:
                     print(f"Tipo de segmento desconocido: {segment.type}")
                     continue
-                
-                if chunk is not None:
-                    # Aplicar fades INTELIGENTES: solo si fondos cambian
-                    apply_fade_in = self._should_apply_fade(segments, i, 'in')
-                    apply_fade_out = self._should_apply_fade(segments, i, 'out')
-                    
-                    # Log de fades aplicados
-                    fade_info = []
-                    if apply_fade_in:
-                        fade_info.append("fade-in")
-                    if apply_fade_out:
-                        fade_info.append("fade-out")
-                    
-                    if fade_info:
-                        print(f"  Aplicando: {', '.join(fade_info)}")
-                    else:
-                        print(f"  Sin fades (continuidad de fondo)")
-                    
-                    chunk = self._apply_smart_fade(
-                        chunk, 
-                        target_sr, 
-                        apply_fade_in=apply_fade_in,
-                        apply_fade_out=apply_fade_out,
-                        fade_duration=0.4  # 400ms para fades MUY suaves
-                    )
-                    
-                    audio_chunks.append(chunk)
-                    # Guardar metadata del segmento para crossfade posterior
-                    segment_metadata.append({
-                        'backgrounds': set(self._get_background_filters(segment)),
-                        'segment_idx': i
-                    })
-                    
-                    # Liberar referencia del chunk original para ayudar al GC
+
+                if chunk is not None and len(chunk) > 0:
+                    clean_chunks.append(chunk)
+                    end_sample = current_sample + len(chunk)
+                    for bg_id in self._get_background_filters(segment):
+                        bg_timeline.append({
+                            'bg_id':  bg_id,
+                            'start':  current_sample,
+                            'end':    end_sample,
+                        })
+                    current_sample = end_sample
                     del chunk
-                    
-                # Limpieza de memoria AGRESIVA después de cada segmento
-                # Esto previene acumulación que causa segfaults
-                import gc
-                gc.collect()
-                    
-            except MemoryError as e:
-                print(f"Error de memoria en segmento {i+1}: {e}")
-                print(f"Audio demasiado largo o complejo - saltando segmento")
-                # Liberar memoria y continuar
-                import gc
-                gc.collect()
-                continue
-            except RuntimeError as e:
-                # RuntimeError puede indicar problemas de CUDA/GPU
-                print(f"Error de runtime en segmento {i+1}: {e}")
-                print(f"Posible problema de GPU - saltando segmento")
-                import gc
-                gc.collect()
-                continue
+
             except Exception as e:
                 print(f"Error procesando segmento {i+1}: {e}")
-                import traceback
                 traceback.print_exc()
-                # Continuar con siguiente segmento
-                import gc
+            finally:
                 gc.collect()
-        
-        # 3. Concatenar chunks con crossfade inteligente
-        if not audio_chunks:
+
+        if not clean_chunks:
             print("No se generó audio")
-            # Retornar silencio de 1 segundo
             return (np.zeros(target_sr, dtype=np.float32), target_sr)
-        
-        print(f"\nCombinando {len(audio_chunks)} chunks de audio con crossfade inteligente...")
-        
-        # Aplicar crossfade entre chunks con fondos iguales
-        final_audio = self._crossfade_chunks(audio_chunks, segment_metadata, target_sr)
-        
-        # 4. Normalizar audio final
+
+        # ── 3. Concatenar con crossfade corto ────────────────────────────────
+        print(f"\nCombinando {len(clean_chunks)} chunks...")
+        final_voice = self._concat_smooth(clean_chunks, target_sr, xfade_ms=60)
+
+        # ── 4. Capa de fondo continua ────────────────────────────────────────
+        if bg_timeline:
+            final_audio = self._overlay_backgrounds(final_voice, target_sr, bg_timeline)
+        else:
+            final_audio = final_voice
+
+        # ── 5. Fade global SOLO en extremos ──────────────────────────────────
+        final_audio = self._apply_global_fade(final_audio, target_sr, fade_ms=120)
+
+        # ── 6. Normalizar ────────────────────────────────────────────────────
         max_val = np.max(np.abs(final_audio))
         if max_val > 0:
-            final_audio = final_audio / max_val * 0.9
-        
-        # Validar que el audio final sea válido (sin NaN o infinitos)
+            final_audio = final_audio / max_val * 0.92
+
         if not np.isfinite(final_audio).all():
-            print("Advertencia: Audio final contiene valores inválidos, limpiando...")
+            print("Advertencia: valores inválidos en audio final, limpiando...")
             final_audio = np.nan_to_num(final_audio, nan=0.0, posinf=0.9, neginf=-0.9)
-        
+
         print(f"Audio final generado: {len(final_audio)/target_sr:.2f}s")
-        
-        return (final_audio, target_sr)
+        return (final_audio.astype(np.float32), target_sr)
+
+    # ── Helpers de combinación ─────────────────────────────────────────────────
+
+    def _concat_smooth(self, chunks: List[np.ndarray], sr: int,
+                       xfade_ms: int = 60) -> np.ndarray:
+        """
+        Concatena chunks con un crossfade MUY corto entre ellos.
+        Solo elimina clicks en las uniones — NO desvanece las voces.
+        """
+        if not chunks:
+            return np.array([], dtype=np.float32)
+        if len(chunks) == 1:
+            return chunks[0].copy()
+
+        xfade = int(sr * xfade_ms / 1000)
+        result = chunks[0].copy()
+
+        for chunk in chunks[1:]:
+            overlap = min(xfade, len(result), len(chunk))
+            if overlap > 0:
+                t = np.linspace(0, np.pi, overlap)
+                fade_out = 0.5 * (1 + np.cos(t))
+                fade_in  = 0.5 * (1 - np.cos(t))
+                blended  = result[-overlap:] * fade_out + chunk[:overlap] * fade_in
+                result   = np.concatenate([result[:-overlap], blended, chunk[overlap:]])
+            else:
+                result = np.concatenate([result, chunk])
+
+        return result.astype(np.float32)
+
+    def _apply_global_fade(self, audio: np.ndarray, sr: int,
+                           fade_ms: int = 120) -> np.ndarray:
+        """
+        Aplica fade-in y fade-out de fade_ms ms SOLO en los extremos del audio
+        completo. Las voces intermedias no se tocan.
+        """
+        if len(audio) == 0:
+            return audio
+
+        fade_s = min(int(sr * fade_ms / 1000), len(audio) // 4)
+        if fade_s <= 0:
+            return audio
+
+        result = audio.copy()
+        t = np.linspace(0, np.pi, fade_s)
+        result[:fade_s]  *= 0.5 * (1 - np.cos(t))
+        result[-fade_s:] *= 0.5 * (1 + np.cos(t))
+        return result
+
+    def _overlay_backgrounds(self, voice: np.ndarray, sr: int,
+                              bg_timeline: List[dict]) -> np.ndarray:
+        """
+        Construye una capa de fondo continua y la mezcla sobre la voz.
+
+        Reglas:
+        - El volumen del fondo es el configurado en backgrounds.json
+        - Segmentos consecutivos con el MISMO fondo se reproducen como un loop
+          continuo (sin restart en cada segmento)
+        - El fondo hace fade-in al entrar y fade-out al salir (300ms)
+        - Se pueden apilar varios fondos en el mismo segmento (p.ej. fa + fb)
+        - La voz nunca se modifica: solo se suma la capa de fondo
+        """
+        total_len = len(voice)
+        bg_layer  = np.zeros(total_len, dtype=np.float32)
+
+        # Cache SOLO del array de audio (resampled, normalizado a peak 1.0).
+        # El volumen NO se cachea: se lee siempre fresco del JSON para que
+        # cambios en backgrounds.json tomen efecto sin reiniciar la app.
+        audio_cache: dict = {}
+
+        def get_bg(bg_id: str):
+            """Retorna (audio_normalizado, volume_actual). Audio cacheado, volumen fresco."""
+            # Cargar y cachear el array de audio la primera vez
+            if bg_id not in audio_cache:
+                data = self.background_manager.load_background_audio(bg_id)
+                if data is None:
+                    audio_cache[bg_id] = None
+                    return None
+                bg_audio, bg_sr, _vol = data
+                if bg_sr != sr:
+                    from scipy.signal import resample as sp_resample
+                    new_len  = int(len(bg_audio) * sr / bg_sr)
+                    bg_audio = sp_resample(bg_audio, new_len).astype(np.float32)
+                peak = np.max(np.abs(bg_audio))
+                if peak > 0:
+                    bg_audio = bg_audio / peak   # Normalizar a peak 1.0
+                audio_cache[bg_id] = bg_audio
+
+            cached_audio = audio_cache[bg_id]
+            if cached_audio is None:
+                return None
+
+            # Leer el volumen SIEMPRE fresco (costo mínimo: solo stat() si el JSON no cambió)
+            bg_vol = self.background_manager.get_background_volume(bg_id)
+            return cached_audio, bg_vol
+
+        # ------------------------------------------------------------------
+        # Fusionar entradas consecutivas del MISMO fondo en un único span
+        # Esto garantiza que el loop del fondo sea continuo entre segmentos
+        # ------------------------------------------------------------------
+        merged: dict = {}  # bg_id → [(start, end), ...]
+        for entry in bg_timeline:
+            bg_id = entry['bg_id']
+            start = max(0, entry['start'])
+            end   = min(total_len, entry['end'])
+            if start >= end:
+                continue
+            if bg_id not in merged:
+                merged[bg_id] = [(start, end)]
+            else:
+                last_s, last_e = merged[bg_id][-1]
+                # Considerar consecutivos si están a menos de 5ms de distancia
+                gap_tolerance = int(sr * 0.005)
+                if start <= last_e + gap_tolerance:
+                    merged[bg_id][-1] = (last_s, max(last_e, end))
+                else:
+                    merged[bg_id].append((start, end))
+
+        # ------------------------------------------------------------------
+        # Rellenar bg_layer con cada fondo en sus spans
+        # ------------------------------------------------------------------
+        for bg_id, spans in merged.items():
+            bg_data = get_bg(bg_id)
+            if bg_data is None:
+                print(f"  Fondo '{bg_id}' no encontrado, ignorando")
+                continue
+            bg_audio, bg_vol = bg_data
+
+            for span_start, span_end in spans:
+                span_len = span_end - span_start
+                if span_len <= 0:
+                    continue
+
+                # Loop continuo del fondo para cubrir toda la duración del span
+                if len(bg_audio) < span_len:
+                    reps      = int(np.ceil(span_len / len(bg_audio)))
+                    bg_tiled  = np.tile(bg_audio, reps)[:span_len]
+                else:
+                    bg_tiled  = bg_audio[:span_len].copy()
+
+                # Acumular (permite múltiples fondos en el mismo rango)
+                bg_layer[span_start:span_end] += bg_tiled * bg_vol
+                print(f"  Fondo '{bg_id}' (vol={bg_vol:.2f}): "
+                      f"{span_start/sr:.2f}s – {span_end/sr:.2f}s")
+
+        if np.max(np.abs(bg_layer)) == 0:
+            return voice   # Sin fondo activo → devolver voz sin cambios
+
+        # ------------------------------------------------------------------
+        # Fade-in/out del fondo (300ms) al inicio y final de la región activa
+        # Esto evita que el fondo entre/salga abruptamente
+        # ------------------------------------------------------------------
+        fade_s     = int(sr * 0.30)   # 300ms
+        active_idx = np.where(np.abs(bg_layer) > 1e-8)[0]
+        if len(active_idx) > 0:
+            a_start = int(active_idx[0])
+            a_end   = int(active_idx[-1]) + 1
+
+            fi = min(fade_s, a_end - a_start)
+            if fi > 0:
+                t_in  = np.linspace(0, np.pi, fi)
+                bg_layer[a_start:a_start + fi] *= 0.5 * (1 - np.cos(t_in))
+
+            fo = min(fade_s, a_end - a_start)
+            if fo > 0:
+                t_out = np.linspace(0, np.pi, fo)
+                bg_layer[a_end - fo:a_end] *= 0.5 * (1 + np.cos(t_out))
+
+        # ------------------------------------------------------------------
+        # Mezcla: voz al 100% + fondo con su volumen original
+        # No re-normalizar — el volumen del JSON es el que manda
+        # Solo hacemos clip suave para evitar distorsión
+        # ------------------------------------------------------------------
+        mixed = voice + bg_layer
+        mixed = np.clip(mixed, -0.99, 0.99)
+        return mixed.astype(np.float32)
     
     def _process_voice_segment(self, segment: MessageSegment, target_sr: int, apply_background: bool = True) -> Optional[np.ndarray]:
         """
@@ -435,16 +578,38 @@ class AdvancedAudioProcessor:
             print(f"Voz deshabilitada: {voice_id}")
             return None
         
+        # USAR TTS y RVC compartidos (no crear nuevos por solicitud)
+        # Crear nuevos engines causa heap corruption en Windows (0xc0000374)
+        # porque los modelos Hubert/RMVPE no se liberan correctamente
+        tts_engine = self.tts_engine
+        rvc_engine = self.rvc_engine
+        
+        # Solo crear si realmente no existe (primera vez)
+        if tts_engine is None:
+            print("  Creando TTS Engine (primera vez)...")
+            # IMPORTANTE: Forzar Edge TTS porque Google Cloud TTS usa gRPC
+            # que NO es thread-safe y causa heap corruption en Windows
+            from .models import EdgeTTSConfig
+            edge_config = EdgeTTSConfig()
+            tts_engine = TTSEngine(config=edge_config, provider_name='edge_tts')
+            self.tts_engine = tts_engine  # Guardar referencia para reutilizar
+        
+        if rvc_engine is None:
+            print("  Creando RVC Engine ISOLATED (primera vez)...")
+            # IMPORTANTE: Usar RVCIsolatedEngine que ejecuta cada conversión
+            # en un proceso separado para evitar heap corruption en Windows
+            rvc_engine = RVCIsolatedEngine()
+            self.rvc_engine = rvc_engine  # Guardar referencia para reutilizar
+        
         try:
             # 1. TTS → Audio neutral
             print("Generando TTS...")
             
-            # Debug: verificar tipo de tts_config
             # Actualizar config y sintetizar
-            self.tts_engine.update_config(voice_config.tts_config)
+            tts_engine.update_config(voice_config.tts_config)
             
             # synthesize() retorna la ruta del archivo WAV
-            tts_file_path = self.tts_engine.synthesize(text)
+            tts_file_path = tts_engine.synthesize(text)
             
             # Cargar audio TTS
             tts_audio, tts_sr = sf.read(tts_file_path, dtype='float32')
@@ -461,10 +626,10 @@ class AdvancedAudioProcessor:
                     sf.write(rvc_input_file.name, tts_audio, tts_sr)
                     
                     # Cargar modelo RVC si es necesario
-                    self.rvc_engine.load_model(voice_config.rvc_config)
+                    rvc_engine.load_model(voice_config.rvc_config)
                     
                     # Convertir con protección contra segfaults
-                    rvc_audio, rvc_sr = self.rvc_engine.convert(rvc_input_file.name)
+                    rvc_audio, rvc_sr = rvc_engine.convert(rvc_input_file.name)
                     
                     # Limpiar (puede que RVC ya lo haya eliminado)
                     try:
@@ -539,7 +704,7 @@ class AdvancedAudioProcessor:
             
             # 4. Resample si es necesario
             if final_sr != target_sr:
-                print(f"  4. Resampling {final_sr} → {target_sr} Hz")
+                print(f"  4. Resampling {final_sr} -> {target_sr} Hz")
                 from scipy import signal
                 num_samples = int(len(final_audio) * target_sr / final_sr)
                 final_audio = signal.resample(final_audio, num_samples)
@@ -588,16 +753,26 @@ class AdvancedAudioProcessor:
             return np.zeros(int(target_sr * 0.5), dtype=np.float32)
         
         audio, sr = sound_data
-        
+
         # Asegurar mono
         if len(audio.shape) > 1:
             audio = audio.mean(axis=1)
-        
+
         # Resample si es necesario
         if sr != target_sr:
             from scipy import signal
             num_samples = int(len(audio) * target_sr / sr)
             audio = signal.resample(audio, num_samples)
+
+        # ── Normalización de loudness (RMS) ──────────────────────────────────
+        # Los sonidos cargados desde disco pueden tener niveles muy distintos
+        # a las voces TTS+RVC. Normalizamos al mismo RMS objetivo (~0.12)
+        # para que sonidos y voces tengan percepción de volumen equivalente.
+        TARGET_RMS = 0.12
+        rms = np.sqrt(np.mean(audio ** 2))
+        if rms > 1e-6:
+            audio = audio * (TARGET_RMS / rms)
+        np.clip(audio, -0.99, 0.99, out=audio)
         
         # Aplicar filtros si existen
         if segment.filters:

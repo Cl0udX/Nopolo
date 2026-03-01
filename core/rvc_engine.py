@@ -62,11 +62,10 @@ class RVCEngine:
         
         # Contador de conversiones para prevenir memory leaks
         self.conversion_count = 0
-        # Configuración recomendada: 5 conversiones antes de reiniciar
-        # - 3: Máxima seguridad (uso ligero)
-        # - 5: Balance óptimo (uso normal) 
-        # - 10: Uso intensivo (mayor rendimiento)
-        self.max_conversions_before_restart = 5
+        # DESACTIVADO: El reinicio del motor causa heap corruption en Windows
+        # porque los modelos Hubert/RMVPE son globales y no se liberan correctamente
+        # La limpieza de memoria CUDA es suficiente para preencer leaks
+        self.max_conversions_before_restart = 999999  # Prácticamente desactivado
 
         # Cargar modelo si se proporcionó config
         if config:
@@ -218,20 +217,16 @@ class RVCEngine:
             
             # Incrementar contador de conversiones
             self.conversion_count += 1
-            
-            # Limpiar modelo RMVPE de memoria (causa principal de leaks)
-            self._cleanup_rmvpe_model()
-            
-            # Limpiar cache de GPU después de procesar
+
+            # NO liberar RMVPE entre conversiones del mismo mensaje:
+            # recargar el modelo cuesta ~0.5s extra por conversión.
+            # El subprocess se reinicia proactivamente cada 15 requests,
+            # por lo que los memory leaks se gestionan en ese nivel.
+            # Solo limpiar cache CUDA (rápido, no implica recarga de modelos).
             self._cleanup_memory()
-            
+
             # Log de uso de memoria GPU
             self._log_gpu_memory()
-            
-            # Verificar si necesitamos reiniciar el motor RVC
-            if self.conversion_count >= self.max_conversions_before_restart:
-                print(f"{self.conversion_count} conversiones completadas - Reiniciando motor RVC para prevenir memory leaks...")
-                self._restart_engine()
             
             # Retornar como tupla (wav_data, rate)
             return (audio_opt.astype(np.float32) / 32768.0, tgt_sr)

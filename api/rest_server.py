@@ -1,4 +1,3 @@
-
 """
 API REST para integración con Streamer.bot y otras aplicaciones.
 Permite enviar texto a sintetizar mediante HTTP requests.
@@ -161,71 +160,59 @@ class TTSAPIServer:
     
     def _start_multivoice_worker(self):
         """Inicia el worker thread para procesar cola multi-voz secuencialmente"""
+
         def multivoice_worker():
             from core.audio_player import play_wav
-            import gc
-            
+            from core.rvc_subprocess_persistent import PersistentSubprocessProcessor
+
+            # PROCESADOR PERSISTENTE:
+            # El subprocess hijo carga los modelos (Hubert, RMVPE, RVC) UNA SOLA VEZ
+            # y luego procesa mensajes en loop → sin overhead de arranque por mensaje.
+            # Si crashea (segfault / heap corruption), se reinicia automáticamente.
+            processor = PersistentSubprocessProcessor(voice_manager=self.voice_manager)
+
+            request_count = 0
             while True:
+                text = None
                 try:
-                    # Obtener siguiente item de la cola (texto y autor opcional)
                     text, author = self.multivoice_queue.get()
-                    
-                    print(f"[Worker Multi-Voz] Procesando desde endpoint: {text[:50]}...")
-                    
-                    # Procesar mensaje (puede tardar varios segundos con TTS + RVC)
-                    audio_data, sample_rate = self.advanced_processor.process_message(text)
-                    
-                    # Enviar evento al overlay JUSTO ANTES de reproducir (cuando el audio está listo)
-                    # Si viene author, usarlo en lugar de "Multi-Voz"
+                    request_count += 1
+                    print(f"\n{'='*60}")
+                    print(f"[Worker Nopolo] Solicitud #{request_count}: {text[:60]}...")
+                    print(f"{'='*60}")
+
+                    # Todo el procesamiento (TTS + RVC + filtros) ocurre en el
+                    # subprocess persistente → proceso principal nunca toca CUDA
+                    audio_data, sample_rate = processor.process_message(text)
+
+                    # Mostrar overlay ANTES de reproducir (audio ya está listo)
                     display_name = author if author else "Multi-Voz (API)"
-                    print(f"[Worker Multi-Voz] Enviando evento overlay con is_nopolo=True, display=\"{display_name}\"")
-                    
-                    # Usar overlay manager centralizado
                     overlay_mgr = get_overlay_manager()
                     overlay_mgr.show(text, display_name, is_nopolo=True)
-                    
-                    # Reproducir (esto bloquea hasta que termine el audio)
+
+                    # Reproducir (bloqueante hasta que termina)
                     play_wav((audio_data, sample_rate))
-                    
-                    # Limpiar overlay cuando termina
-                    overlay_mgr.hide()
-                    
-                    # Limpiar memoria AGRESIVAMENTE después de cada procesamiento
                     del audio_data
-                    gc.collect()
-                    
-                    print(f"[Worker]Completado exitosamente")
-                    
-                except MemoryError as e:
-                    print(f"[Worker] Error de memoria en multi-voz: {e}")
-                    overlay_mgr = get_overlay_manager()
+
                     overlay_mgr.hide()
-                    # Limpieza agresiva
-                    gc.collect()
-                    
-                except RuntimeError as e:
-                    print(f"[Worker] Error de runtime (GPU/CUDA): {e}")
-                    overlay_mgr = get_overlay_manager()
-                    overlay_mgr.hide()
-                    # Limpieza agresiva
-                    gc.collect()
-                    
+                    print(f"[Worker Nopolo] Solicitud #{request_count} completada")
+
                 except Exception as e:
                     import traceback
-                    print(f"⚠️ [Worker] Error en worker multi-voz: {e}")
+                    print(f"[Worker Nopolo] ERROR en solicitud #{request_count}: {e}")
                     traceback.print_exc()
-                    overlay_mgr = get_overlay_manager()
-                    overlay_mgr.hide()
-                    # Limpieza agresiva
-                    gc.collect()
-                    
+                    try:
+                        get_overlay_manager().hide()
+                    except Exception:
+                        pass
+
                 finally:
                     self.multivoice_queue.task_done()
-        
+
         # Iniciar worker thread
         worker_thread = threading.Thread(target=multivoice_worker, daemon=True)
         worker_thread.start()
-        print("Worker multi-voz iniciado")
+        print("Worker multi-voz iniciado (subprocess persistente)")
     
     def _setup_routes(self):
         """Configura todas las rutas de la API"""
@@ -278,7 +265,7 @@ class TTSAPIServer:
                         if not profile:
                             raise HTTPException(
                                 status_code=500,
-                                detail="No hay voces solo-TTS disponibles para selecci\u00f3n aleatoria"
+                                detail="No hay voces solo-TTS disponibles para selección aleatoria"
                             )
                     else:
                         # Intentar obtener la voz especificada (por ID o nombre)
@@ -286,7 +273,7 @@ class TTSAPIServer:
                         
                         # Si no existe, usar voz aleatoria sin RVC como fallback
                         if not profile:
-                            print(f"\u26a0\ufe0f Voz '{request.voice_id}' no encontrada, usando voz aleatoria sin RVC")
+                            print(f"⚠️ Voz '{request.voice_id}' no encontrada, usando voz aleatoria sin RVC")
                             profile = self._get_random_tts_only_voice()
                             if not profile:
                                 raise HTTPException(

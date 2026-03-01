@@ -35,9 +35,21 @@ class BackgroundManager:
         self.backgrounds: Dict[str, Dict] = {}
         self.backgrounds_by_id: Dict[str, Dict] = {}
         self.backgrounds_by_name: Dict[str, Dict] = {}
-        
+        self._config_mtime: float = 0.0  # Para detectar cambios en el JSON
+
         self._load_config()
     
+    def _reload_if_changed(self):
+        """Recarga el JSON si el archivo fue modificado desde la última carga."""
+        try:
+            if os.path.exists(self.config_path):
+                mtime = os.path.getmtime(self.config_path)
+                if mtime != self._config_mtime:
+                    print(f"backgrounds.json modificado, recargando...")
+                    self._load_config()
+        except Exception:
+            pass
+
     def _load_config(self):
         """Carga la configuración de fondos desde el archivo JSON."""
         try:
@@ -45,14 +57,19 @@ class BackgroundManager:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                     self.backgrounds = config.get('backgrounds', {})
-                    
+
                     # Crear índices por ID y nombre
+                    self.backgrounds_by_id = {}
+                    self.backgrounds_by_name = {}
                     for bg_id, bg_data in self.backgrounds.items():
                         self.backgrounds_by_id[bg_id] = bg_data
                         name = bg_data.get('name', '').lower()
                         if name:
                             self.backgrounds_by_name[name] = bg_data
-                    
+
+                    # Actualizar mtime para no recargar innecesariamente
+                    self._config_mtime = os.path.getmtime(self.config_path)
+
                     if self.backgrounds:
                         print(f"Cargados {len(self.backgrounds)} fondos desde {self.config_path}")
                     else:
@@ -145,7 +162,22 @@ class BackgroundManager:
         if bg:
             return bg.get('path')
         return None
-    
+
+    def get_background_volume(self, identifier: str) -> float:
+        """
+        Retorna el volumen actual del fondo, recargando el JSON si fue modificado.
+        Operación ligera: no carga el archivo de audio.
+
+        Args:
+            identifier: ID o nombre del fondo
+
+        Returns:
+            Volumen configurado (0.0 – 1.0), por defecto 0.3 si no se encuentra
+        """
+        self._reload_if_changed()
+        bg = self.get_background(identifier)
+        return float(bg.get('volume', 0.3)) if bg else 0.3
+
     def load_background_audio(self, identifier: str) -> Optional[Tuple[np.ndarray, int, float]]:
         """
         Carga el audio de un fondo.
@@ -156,11 +188,14 @@ class BackgroundManager:
         Returns:
             Tupla (audio_data, sample_rate, volume) o None si no existe
         """
+        # Recargar JSON si fue modificado (costo mínimo: solo stat del archivo)
+        self._reload_if_changed()
+
         bg = self.get_background(identifier)
         if not bg:
             print(f"Fondo '{identifier}' no encontrado")
             return None
-        
+
         path = bg.get('path')
         volume = bg.get('volume', 0.3)
         
