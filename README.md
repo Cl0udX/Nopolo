@@ -352,3 +352,5 @@ Cuando ejecutas con API habilitada:
 - **Health check:** http://localhost:8000/health
 
 ---
+
+// https://www.streamweasels.com/tools/convert-twitch-username-%20to-user-id/ para encontrar o ID do canal, necessário para filtrar os emotes do Twitch.

@@ -1,3 +1,14 @@
 {
-  "audio_output_device": null
+  "audio_output_device": null,
+  "text_filter": {
+    "remove_unicode_emoji": true,
+    "remove_twitch_emotes": true,
+    "remove_colon_emotes": true,
+    "extra_words": [],
+    "twitch_channels": [
+      { "id": "96391914",  "name": "postincloud" },
+      { "id": "180074397", "name": "maxanoqul" }
+    ],
+    "cache_ttl_hours": 24
+  }
 }

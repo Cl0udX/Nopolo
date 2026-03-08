@@ -297,10 +297,17 @@ class TTSAPIServer:
                             detail="No default voice profile configured"
                         )
                 
+                # Filtrar emojis/emotes antes de encolar
+                from core.text_filter import filter_text
+                clean_text = filter_text(request.text)
+                if not clean_text:
+                    return TTSResponse(success=True, message="Text was empty after filtering",
+                                       queue_position=0, voice_used=profile.display_name)
+
                 # Agregar a la cola
                 # Usar author si está disponible, sino el nombre de la voz
                 voice_name = profile.display_name
-                self.audio_queue.add(request.text, profile, voice_name, self.main_window, request.author)
+                self.audio_queue.add(clean_text, profile, voice_name, self.main_window, request.author)
                 queue_pos = self.audio_queue.queue.qsize()
                 
                 return TTSResponse(
@@ -330,9 +337,15 @@ class TTSAPIServer:
             Ejemplo: `"dross: hola (disparo) homero: doh! reportero.fa: en vivo"`
             """
             try:
+                # Filtrar emojis/emotes antes de encolar
+                from core.text_filter import filter_text
+                clean_text = filter_text(request.text)
+                if not clean_text:
+                    return TTSResponse(success=True, message="Text was empty after filtering",
+                                       queue_position=0, voice_used="multi-voice")
+
                 # Agregar a la cola dedicada de multi-voz (procesamiento secuencial)
-                # Guardar texto y autor (opcional)
-                self.multivoice_queue.put((request.text, request.author))
+                self.multivoice_queue.put((clean_text, request.author))
                 queue_pos = self.multivoice_queue.qsize()
                 
                 return TTSResponse(
