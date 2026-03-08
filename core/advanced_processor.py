@@ -283,7 +283,8 @@ class AdvancedAudioProcessor:
             # En cualquier otro caso → SI aplicar fade
             return True
     
-    def process_message(self, message: str, target_sr: int = 16000) -> Tuple[np.ndarray, int]:
+    def process_message(self, message: str, target_sr: int = 16000,
+                        return_timeline: bool = False):
         """
         Procesa un mensaje complejo y genera audio.
 
@@ -294,6 +295,11 @@ class AdvancedAudioProcessor:
           4. Superponer capa de fondo continua (respetando volumen del JSON)
           5. Fade global de 120ms solo en los extremos del audio completo
           6. Normalizar
+
+        Args:
+            return_timeline: Si True, devuelve (audio, sr, timeline) donde
+                timeline es lista de dicts {start_sec, end_sec, profile, peaks}.
+                peaks = [(offset_sec, is_talking), ...] pre-calculados.
         """
         import gc
         import traceback
@@ -312,6 +318,9 @@ class AdvancedAudioProcessor:
         # bg_timeline: qué fondo va en qué muestra del audio final
         # {bg_id, start_sample, end_sample}
         bg_timeline: List[dict] = []
+        # avatar_timeline: [(start_sec, end_sec, VoiceProfile_or_None, peaks)]
+        # peaks = [(offset_sec, is_talking), ...]   — pre-calculados si return_timeline
+        avatar_timeline: List[dict] = []
         current_sample = 0
 
         for i, segment in enumerate(segments):
@@ -341,6 +350,33 @@ class AdvancedAudioProcessor:
                             'start':  current_sample,
                             'end':    end_sample,
                         })
+
+                    # Capturar bloque para el timeline de avatares
+                    if return_timeline and segment.type == SegmentType.VOICE:
+                        profile = None
+                        if segment.voice:       # ← atributo correcto del MessageSegment
+                            try:
+                                profile = self.voice_manager.get_profile(segment.voice)
+                            except Exception:
+                                pass
+                        # Pre-calcular peaks para este chunk
+                        peaks = self._compute_avatar_peaks(chunk, target_sr)
+                        avatar_timeline.append({
+                            'start_sec': current_sample / target_sr,
+                            'end_sec':   end_sample / target_sr,
+                            'profile':   profile,
+                            'peaks':     peaks,
+                            'is_sound':  False,
+                        })
+                    elif return_timeline and segment.type == SegmentType.SOUND:
+                        avatar_timeline.append({
+                            'start_sec': current_sample / target_sr,
+                            'end_sec':   end_sample / target_sr,
+                            'profile':   None,
+                            'peaks':     [],
+                            'is_sound':  True,
+                        })
+
                     current_sample = end_sample
                     del chunk
 
@@ -352,7 +388,8 @@ class AdvancedAudioProcessor:
 
         if not clean_chunks:
             print("No se generó audio")
-            return (np.zeros(target_sr, dtype=np.float32), target_sr)
+            empty = (np.zeros(target_sr, dtype=np.float32), target_sr)
+            return (*empty, []) if return_timeline else empty
 
         # ── 3. Concatenar con crossfade corto ────────────────────────────────
         print(f"\nCombinando {len(clean_chunks)} chunks...")
@@ -377,9 +414,28 @@ class AdvancedAudioProcessor:
             final_audio = np.nan_to_num(final_audio, nan=0.0, posinf=0.9, neginf=-0.9)
 
         print(f"Audio final generado: {len(final_audio)/target_sr:.2f}s")
-        return (final_audio.astype(np.float32), target_sr)
+        result = (final_audio.astype(np.float32), target_sr)
+        return (*result, avatar_timeline) if return_timeline else result
 
     # ── Helpers de combinación ─────────────────────────────────────────────────
+
+    def _compute_avatar_peaks(self, audio: np.ndarray, sr: int,
+                               interval_ms: int = 40,
+                               threshold: float = 0.05) -> list:
+        """
+        Pre-calcula eventos boca-abierta/cerrada para un chunk de audio.
+
+        Returns:
+            [(offset_sec, is_talking), ...] en intervalos de interval_ms
+        """
+        chunk_size = max(1, int(sr * interval_ms / 1000))
+        flat = audio.flatten()
+        peaks = []
+        for i in range(0, len(flat), chunk_size):
+            chunk = flat[i:i + chunk_size]
+            rms = float(np.sqrt(np.mean(chunk ** 2))) if len(chunk) > 0 else 0.0
+            peaks.append((i / sr, rms > threshold))
+        return peaks
 
     def _concat_smooth(self, chunks: List[np.ndarray], sr: int,
                        xfade_ms: int = 60) -> np.ndarray:

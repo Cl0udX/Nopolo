@@ -4,7 +4,7 @@ import gc
 from typing import Optional
 from .tts_engine import TTSEngine
 from .rvc_engine import RVCEngine
-from .audio_player import play_wav, stop_audio
+from .audio_player import play_wav, play_wav_with_peaks, stop_audio
 from .models import VoiceProfile
 from .overlay_manager import get_overlay_manager
 
@@ -72,7 +72,14 @@ class AudioQueue:
                 
                 # Usar overlay manager centralizado
                 overlay_mgr = get_overlay_manager()
-                overlay_mgr.show(text, display_name, is_nopolo=False)
+                # Obtener imágenes del avatar si el perfil tiene RVC configurado
+                _img_idle    = None
+                _img_talking = None
+                if voice_profile and voice_profile.rvc_config:
+                    _img_idle    = voice_profile.rvc_config.image_idle
+                    _img_talking = voice_profile.rvc_config.image_talking
+                overlay_mgr.show(text, display_name, is_nopolo=False,
+                                 image_idle=_img_idle, image_talking=_img_talking)
                 
                 # ── Protección GC ─────────────────────────────────────────────
                 # Desactivar GC durante las operaciones nativas (TTS/RVC).
@@ -120,8 +127,18 @@ class AudioQueue:
                     gc.collect()
                 # ── Fin protección GC ──────────────────────────────────────────
 
-                # Paso 3: Reproducir
-                play_wav(converted_wav)
+                # Paso 3: Reproducir (con detección de peaks para avatar)
+                _has_avatar = bool(
+                    voice_profile and voice_profile.rvc_config
+                    and (voice_profile.rvc_config.image_idle
+                         or voice_profile.rvc_config.image_talking)
+                )
+                if _has_avatar:
+                    def _on_peak(talking: bool):
+                        get_overlay_manager().avatar_peak(talking)
+                    play_wav_with_peaks(converted_wav, on_peak=_on_peak)
+                else:
+                    play_wav(converted_wav)
                 
                 # Limpiar overlay al terminar
                 overlay_mgr = get_overlay_manager()

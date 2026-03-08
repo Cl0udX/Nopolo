@@ -348,7 +348,48 @@ class VoiceConfigDialog(QDialog):
         
         rvc_params_group.setLayout(rvc_params_layout)
         rvc_layout.addWidget(rvc_params_group)
-        
+
+        # ── Imágenes de avatar (opcionales) ───────────────────────────────
+        avatar_group = QGroupBox("Imágenes de Avatar (Opcional)")
+        avatar_layout = QFormLayout()
+
+        # Imagen boca cerrada (reposo)
+        idle_row = QHBoxLayout()
+        self.image_idle_input = QLineEdit()
+        self.image_idle_input.setPlaceholderText("PNG boca cerrada (reposo)…")
+        self.image_idle_input.setReadOnly(True)
+        idle_row.addWidget(self.image_idle_input)
+        self.browse_idle_btn = QPushButton("📁")
+        self.browse_idle_btn.setMaximumWidth(36)
+        self.browse_idle_btn.setToolTip("Seleccionar imagen boca cerrada")
+        self.browse_idle_btn.clicked.connect(lambda: self._browse_avatar_image(self.image_idle_input))
+        idle_row.addWidget(self.browse_idle_btn)
+        self.clear_idle_btn = QPushButton("🗑️")
+        self.clear_idle_btn.setMaximumWidth(36)
+        self.clear_idle_btn.clicked.connect(lambda: self.image_idle_input.clear())
+        idle_row.addWidget(self.clear_idle_btn)
+        avatar_layout.addRow("Boca cerrada:", idle_row)
+
+        # Imagen boca abierta (hablando)
+        talk_row = QHBoxLayout()
+        self.image_talking_input = QLineEdit()
+        self.image_talking_input.setPlaceholderText("PNG boca abierta (hablando)…")
+        self.image_talking_input.setReadOnly(True)
+        talk_row.addWidget(self.image_talking_input)
+        self.browse_talking_btn = QPushButton("📁")
+        self.browse_talking_btn.setMaximumWidth(36)
+        self.browse_talking_btn.setToolTip("Seleccionar imagen boca abierta")
+        self.browse_talking_btn.clicked.connect(lambda: self._browse_avatar_image(self.image_talking_input))
+        talk_row.addWidget(self.browse_talking_btn)
+        self.clear_talking_btn = QPushButton("🗑️")
+        self.clear_talking_btn.setMaximumWidth(36)
+        self.clear_talking_btn.clicked.connect(lambda: self.image_talking_input.clear())
+        talk_row.addWidget(self.clear_talking_btn)
+        avatar_layout.addRow("Boca abierta:", talk_row)
+
+        avatar_group.setLayout(avatar_layout)
+        rvc_layout.addWidget(avatar_group)
+
         self.rvc_config_widget.setLayout(rvc_layout)
         self.rvc_config_widget.setEnabled(False)  # Deshabilitado por defecto
         layout.addWidget(self.rvc_config_widget)
@@ -403,9 +444,20 @@ class VoiceConfigDialog(QDialog):
             "voices/",
             "Index Files (*.index)"
         )
-        
+
         if file_path:
             self.index_path_input.setText(file_path)
+
+    def _browse_avatar_image(self, target_input: QLineEdit):
+        """Abre diálogo para seleccionar imagen PNG/JPG del avatar"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar Imagen de Avatar",
+            "",
+            "Imágenes (*.png *.jpg *.jpeg *.webp)"
+        )
+        if file_path:
+            target_input.setText(file_path)
     
     def _load_profile_data(self):
         """Carga datos del perfil en modo editar"""
@@ -498,10 +550,16 @@ class VoiceConfigDialog(QDialog):
             f0_index = self.f0_combo.findText(rvc.f0_method)
             if f0_index >= 0:
                 self.f0_combo.setCurrentIndex(f0_index)
-            
+
             gender_index = self.gender_combo.findText(rvc.gender)
             if gender_index >= 0:
                 self.gender_combo.setCurrentIndex(gender_index)
+
+            # Imágenes de avatar
+            if rvc.image_idle:
+                self.image_idle_input.setText(rvc.image_idle)
+            if rvc.image_talking:
+                self.image_talking_input.setText(rvc.image_talking)
     
     def _build_rvc_config(self) -> RVCConfig:
         """Construye RVCConfig desde la UI"""
@@ -528,7 +586,9 @@ class VoiceConfigDialog(QDialog):
             rms_mix_rate=self.rms_slider.value() / 100.0,
             protect=self.protect_slider.value() / 100.0,
             f0_method=self.f0_combo.currentText(),
-            gender=self.gender_combo.currentText()
+            gender=self.gender_combo.currentText(),
+            image_idle=self.image_idle_input.text() or None,
+            image_talking=self.image_talking_input.text() or None,
         )
     
     def _test_tts_only(self):

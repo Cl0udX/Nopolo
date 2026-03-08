@@ -30,6 +30,7 @@
 
 body {
     padding: 24px;
+    padding-top: calc(var(--char-height) * 0.55);  /* solo la parte que asoma sobre el recuadro */
     font-family: var(--font);
     background: transparent;
     overflow: hidden;
@@ -43,6 +44,8 @@ body {
     flex-direction: column;
     gap: 0;
     max-width: 860px;
+    position: relative;
+    z-index: 2;
     transform-origin: bottom center;
     transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
 }
@@ -198,5 +201,76 @@ body {
     #text-content  { font-size: 20px; }
     #brand-creator { font-size: 24px; }
     #brand-logo    { height: 56px; width: 56px; }
+}
+
+/* ============================================================
+   AV-ROW — Contenedor flex que alinea overlay + personaje
+   ============================================================ */
+#av-row {
+    display: inline-flex;            /* se estrecha al tamaño del overlay, no page-width */
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 0;
+    position: relative;
+    /* clip-path: telón de títeres.
+       -400px arriba = el personaje completo (380px) se ve sobre el recuadro.
+       0px abajo = el personaje desaparece exactamente al cruzar el borde inferior. */
+    clip-path: inset(-600px -500px 0px -500px);
+}
+
+/* ============================================================
+   PERSONAJE / AVATAR
+   Aparece a la derecha del cuadro de texto, anclado al mismo
+   borde inferior, extendiéndose hacia arriba.
+   --char-height: ajusta el tamaño del personaje.
+   ============================================================ */
+:root {
+    --char-height: 256px;
+}
+
+#character-wrapper {
+    /* Absolute dentro de #av-row: el borde derecho queda alineado
+       con el borde derecho del overlay, sin sobresalir. */
+    position: absolute;
+    right: 200px;
+    bottom: 0;
+    height: var(--char-height);
+    width: auto;
+    display: flex;
+    align-items: flex-end;
+    z-index: 1;           /* detrás del overlay-wrapper (z-index 2) */
+    transform-origin: bottom center;
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#character-wrapper.char-hidden {
+    transform: translateY(calc(var(--char-height) + 40px));
+    pointer-events: none;
+}
+#character-wrapper.char-show {
+    transform: translateY(-30px);   /* 30px sobre el borde del recuadro */
+}
+#character-wrapper.char-hiding {
+    transform: translateY(calc(var(--char-height) + 40px));
+    pointer-events: none;
+}
+
+/* Las dos imágenes se superponen exactamente */
+.char-img {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: var(--char-height);
+    width: auto;
+    object-fit: contain;
+    opacity: 0;
+    transition: none;               /* cambio instantáneo, sin crossfade */
+    image-rendering: auto;
+    filter: drop-shadow(-4px 0 18px rgba(0,0,0,0.7));
+}
+
+/* Solo la imagen activa se muestra */
+.char-img.char-active {
+    opacity: 1;
 }
 

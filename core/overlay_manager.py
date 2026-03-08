@@ -6,7 +6,29 @@ y solapamiento de eventos.
 """
 
 import asyncio
+import base64
+import os
 from typing import Optional
+
+
+def _encode_image(path: Optional[str]) -> Optional[str]:
+    """
+    Lee un PNG/JPG y devuelve una data URL base64.
+    Retorna None si path es None/vacío o el archivo no existe.
+    """
+    if not path:
+        return None
+    try:
+        if not os.path.exists(path):
+            return None
+        ext = os.path.splitext(path)[1].lower()
+        mime = 'image/png' if ext == '.png' else 'image/jpeg'
+        with open(path, 'rb') as f:
+            data = base64.b64encode(f.read()).decode('ascii')
+        return f'data:{mime};base64,{data}'
+    except Exception as e:
+        print(f"[OverlayManager] Error leyendo imagen '{path}': {e}")
+        return None
 
 
 class OverlayManager:
@@ -48,27 +70,34 @@ class OverlayManager:
         self.show_nopolo_mode = show_nopolo
         self.show_normal_mode = show_normal
     
-    def show(self, text: str, voice: str = "", is_nopolo: bool = False):
+    def show(self, text: str, voice: str = "", is_nopolo: bool = False,
+             image_idle: Optional[str] = None, image_talking: Optional[str] = None):
         """
         Muestra texto en el overlay.
-        
+
         Args:
             text: Texto a mostrar
             voice: Nombre de voz o usuario
             is_nopolo: True para modo multi-voz (con colores), False para modo normal
+            image_idle: Ruta al PNG boca cerrada del personaje (opcional)
+            image_talking: Ruta al PNG boca abierta del personaje (opcional)
         """
         if not self._should_show(is_nopolo):
             return
-        
+
         if not self.ws_server or not self.event_loop or not self.server_running:
             return
-        
+
         # Marcar que hay un evento activo
         self.current_event_active = True
-        
+
+        # Codificar imágenes si se proporcionaron
+        idle_b64    = _encode_image(image_idle)
+        talking_b64 = _encode_image(image_talking)
+
         # Enviar al WebSocket
         asyncio.run_coroutine_threadsafe(
-            self.ws_server.send_tts_start(text, voice, is_nopolo),
+            self.ws_server.send_tts_start(text, voice, is_nopolo, idle_b64, talking_b64),
             self.event_loop
         )
     
@@ -76,15 +105,50 @@ class OverlayManager:
         """Oculta el overlay"""
         if not self.ws_server or not self.event_loop or not self.server_running:
             return
-        
+
         print(f"[OverlayManager] Ocultando overlay")
-        
+
         # Marcar que no hay evento activo
         self.current_event_active = False
-        
+
         # Enviar al WebSocket
         asyncio.run_coroutine_threadsafe(
             self.ws_server.send_tts_stop(),
+            self.event_loop
+        )
+
+    def avatar_peak(self, talking: bool):
+        """
+        Alterna la imagen del avatar entre boca abierta/cerrada.
+        Debe llamarse desde el hilo de reproducción cada ~80ms.
+        """
+        if not self.ws_server or not self.event_loop or not self.server_running:
+            return
+        asyncio.run_coroutine_threadsafe(
+            self.ws_server.send_avatar_frame(talking),
+            self.event_loop
+        )
+
+    def avatar_change(self, voice: str,
+                      image_idle: Optional[str] = None,
+                      image_talking: Optional[str] = None,
+                      sound_indicator: bool = False):
+        """
+        Cambia el personaje activo (usado en modo multi-voz al cambiar de voz).
+
+        Args:
+            voice: Nombre del nuevo personaje
+            image_idle: Ruta al PNG boca cerrada (opcional)
+            image_talking: Ruta al PNG boca abierta (opcional)
+            sound_indicator: True cuando el segmento es un efecto de sonido (muestra 🔊)
+        """
+        if not self.ws_server or not self.event_loop or not self.server_running:
+            return
+        idle_b64    = _encode_image(image_idle)
+        talking_b64 = _encode_image(image_talking)
+        asyncio.run_coroutine_threadsafe(
+            self.ws_server.send_avatar_change(voice, idle_b64, talking_b64,
+                                              sound_indicator=sound_indicator),
             self.event_loop
         )
     

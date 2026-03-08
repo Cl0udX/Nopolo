@@ -4,6 +4,7 @@ Contiene los métodos principales de síntesis y reproducción.
 """
 import queue
 import threading
+import time
 
 from core.overlay_manager import get_overlay_manager
 
@@ -37,7 +38,8 @@ class PlaybackMixin:
             if text is None:  # señal de cierre
                 break
             try:
-                audio_data, sample_rate = self.advanced_processor.process_message(text)
+                audio_data, sample_rate, avatar_timeline = \
+                    self.advanced_processor.process_message(text, return_timeline=True)
 
                 # Aplicar volumen global
                 vol = getattr(player, '_volume', 1.0)
@@ -48,6 +50,52 @@ class PlaybackMixin:
                 overlay_mgr.show(text, "Multi-Voz (GUI)", is_nopolo=True)
 
                 sd.play(audio_data, sample_rate)
+                play_start = time.time()
+
+                # Hilo de avatares: recorre el timeline y dispara eventos
+                if avatar_timeline:
+                    def _drive_avatars(timeline=avatar_timeline,
+                                       t0=play_start,
+                                       mgr=overlay_mgr):
+                        for entry in timeline:
+                            profile    = entry['profile']
+                            start_sec  = entry['start_sec']
+                            peaks      = entry['peaks']
+                            is_sound   = entry.get('is_sound', False)
+
+                            # Esperar al inicio de este segmento
+                            wait = start_sec - (time.time() - t0)
+                            if wait > 0:
+                                time.sleep(wait)
+
+                            if is_sound:
+                                # Segmento de sonido: ocultar personaje y mostrar 🔊
+                                mgr.avatar_change('🔊', None, None, sound_indicator=True)
+                            else:
+                                # Cambiar personaje
+                                img_idle    = None
+                                img_talking = None
+                                if profile and profile.rvc_config:
+                                    img_idle    = profile.rvc_config.image_idle
+                                    img_talking = profile.rvc_config.image_talking
+                                mgr.avatar_change(
+                                    profile.display_name if profile else '',
+                                    img_idle,
+                                    img_talking,
+                                )
+
+                                # Disparar peaks del segmento
+                                for offset_sec, is_talking in peaks:
+                                    target_t = t0 + start_sec + offset_sec
+                                    sleep_t  = target_t - time.time()
+                                    if sleep_t > 0.005:
+                                        time.sleep(sleep_t)
+                                    mgr.avatar_peak(is_talking)
+
+                        mgr.avatar_peak(False)
+
+                    threading.Thread(target=_drive_avatars, daemon=True).start()
+
                 sd.wait()
 
                 overlay_mgr.hide()

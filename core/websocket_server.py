@@ -116,36 +116,63 @@ class WebSocketServer:
         except FileNotFoundError:
             return web.Response(text="Overlay no encontrado", status=404)
     
-    async def send_tts_start(self, text: str, voice: str = "", is_nopolo: bool = False):
+    async def send_tts_start(self, text: str, voice: str = "", is_nopolo: bool = False,
+                             image_idle_b64: str = None, image_talking_b64: str = None):
         """
-        Envía evento cuando inicia el TTS
-        
+        Envía evento cuando inicia el TTS.
+
         Args:
             text: Texto que se está reproduciendo
             voice: Nombre de la voz
-            is_nopolo: True si es modo Nopolo (multi-voz), False si es modo normal (API/voz única)
+            is_nopolo: True si es modo Nopolo (multi-voz), False si es modo normal
+            image_idle_b64: Data URL base64 del PNG boca cerrada (opcional)
+            image_talking_b64: Data URL base64 del PNG boca abierta (opcional)
         """
         self.current_text = text
         self.current_voice = voice
         self.is_speaking = True
-        
+
         message = {
             'type': 'tts_start',
             'text': text,
             'voice': voice,
-            'is_nopolo': is_nopolo
+            'is_nopolo': is_nopolo,
         }
-        
+        if image_idle_b64:
+            message['image_idle'] = image_idle_b64
+        if image_talking_b64:
+            message['image_talking'] = image_talking_b64
+
         await self._broadcast(message)
-    
+
+    async def send_avatar_frame(self, talking: bool):
+        """Alterna la imagen del avatar entre boca abierta/cerrada."""
+        await self._broadcast({'type': 'avatar_frame', 'talking': talking})
+
+    async def send_avatar_change(self, voice: str,
+                                 image_idle_b64: str = None,
+                                 image_talking_b64: str = None,
+                                 sound_indicator: bool = False):
+        """
+        Cambia el avatar activo (modo multi-voz, transición entre personajes).
+        sound_indicator=True: mostrar emoji 🔊 en lugar de personaje.
+        """
+        message = {'type': 'avatar_change', 'voice': voice,
+                   'sound_indicator': sound_indicator}
+        if image_idle_b64:
+            message['image_idle'] = image_idle_b64
+        if image_talking_b64:
+            message['image_talking'] = image_talking_b64
+        await self._broadcast(message)
+
     async def send_tts_stop(self):
         """Envía evento cuando termina el TTS"""
         self.is_speaking = False
         self.current_text = ""
         self.current_voice = ""
-        
+
         message = {'type': 'tts_stop'}
-        
+
         await self._broadcast(message)
     
     async def _broadcast(self, message: dict):

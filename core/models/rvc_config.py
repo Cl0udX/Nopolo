@@ -35,6 +35,10 @@ class RVCConfig:
     # Metadatos
     gender: str = "male"             # "male", "female", "neutral"
     description: str = ""            # Descripción de la voz
+
+    # Avatar (opcional) — imágenes PNG para el overlay
+    image_idle: Optional[str] = None    # Ruta al PNG con boca cerrada (reposo)
+    image_talking: Optional[str] = None # Ruta al PNG con boca abierta (hablando)
     
     def __post_init__(self):
         """Validación y auto-detección de index"""

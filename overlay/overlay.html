@@ -7,20 +7,31 @@
     <link rel="stylesheet" href="/static/overlay.css">
 </head>
 <body>
-    <div id="overlay-wrapper" class="hidden">
+    <!-- Contenedor flex: overlay a la izquierda, personaje a la derecha -->
+    <div id="av-row">
 
-        <!-- ── Cabecera de marca (FUERA del recuadro) ─────────── -->
-        <div id="brand-header">
-            <img id="brand-logo" src="" alt="Logo" />
-            <span id="brand-creator"></span>
+        <div id="overlay-wrapper" class="hidden">
+
+            <!-- ── Cabecera de marca (FUERA del recuadro) ─────────── -->
+            <div id="brand-header">
+                <img id="brand-logo" src="" alt="Logo" />
+                <span id="brand-creator"></span>
+            </div>
+
+            <!-- ── Cuadro de texto ────────────────────────────────── -->
+            <div id="tts-container">
+
+                <!-- ── Texto principal ──────────────────────────────── -->
+                <div id="text-content"></div>
+
+            </div>
+
         </div>
 
-        <!-- ── Cuadro de texto ────────────────────────────────── -->
-        <div id="tts-container">
-
-            <!-- ── Texto principal ──────────────────────────────── -->
-            <div id="text-content"></div>
-
+        <!-- ── Personaje (a la derecha del overlay, detrás en z-index) ──── -->
+        <div id="character-wrapper" class="char-hidden">
+            <img id="char-idle"    src="" alt="" class="char-img char-active" />
+            <img id="char-talking" src="" alt="" class="char-img" />
         </div>
 
     </div>
@@ -110,8 +121,24 @@
             if (data.type === 'tts_start') {
                 if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
                 showTTS(data.text, data.voice, data.is_nopolo || false);
+                if (data.image_idle || data.image_talking) {
+                    showCharacter(data.voice || '', data.image_idle || '', data.image_talking || '');
+                } else {
+                    hideCharacter();
+                }
             } else if (data.type === 'tts_stop') {
                 hideTTS();
+                hideCharacter();
+            } else if (data.type === 'avatar_frame') {
+                setCharacterTalking(data.talking);
+            } else if (data.type === 'avatar_change') {
+                if (data.sound_indicator) {
+                    hideCharacter();
+                } else if (data.image_idle || data.image_talking) {
+                    showCharacter(data.voice || '', data.image_idle || '', data.image_talking || '');
+                } else {
+                    hideCharacter();
+                }
             }
         }
 
@@ -140,6 +167,46 @@
             }, 450);
         }
 
+        // ── Personaje ───────────────────────────────────────────────────────
+        const charWrapper = document.getElementById('character-wrapper');
+        const charIdle    = document.getElementById('char-idle');
+        const charTalking = document.getElementById('char-talking');
+        let   charHideTimeout = null;
+
+        function showCharacter(name, idleSrc, talkingSrc) {
+            if (charHideTimeout) { clearTimeout(charHideTimeout); charHideTimeout = null; }
+            if (idleSrc)    charIdle.src    = idleSrc;
+            if (talkingSrc) charTalking.src = talkingSrc;
+            // Estado inicial: boca cerrada
+            charIdle.classList.add('char-active');
+            charTalking.classList.remove('char-active');
+            charWrapper.classList.remove('char-hidden', 'char-hiding');
+            charWrapper.classList.add('char-show');
+        }
+
+        function hideCharacter() {
+            charWrapper.classList.remove('char-show');
+            charWrapper.classList.add('char-hiding');
+            charHideTimeout = setTimeout(() => {
+                charWrapper.classList.remove('char-hiding');
+                charWrapper.classList.add('char-hidden');
+                charIdle.src    = '';
+                charTalking.src = '';
+                charHideTimeout = null;
+            }, 500);
+        }
+
+        function setCharacterTalking(talking) {
+            if (talking) {
+                charIdle.classList.remove('char-active');
+                charTalking.classList.add('char-active');
+            } else {
+                charTalking.classList.remove('char-active');
+                charIdle.classList.add('char-active');
+            }
+        }
+
+        // ── Texto ───────────────────────────────────────────────────────────
         function escapeHtml(text) {
             return text
                 .replace(/&/g, '&amp;')
