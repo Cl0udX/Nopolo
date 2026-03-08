@@ -30,7 +30,7 @@
 
 body {
     padding: 24px;
-    padding-top: calc(var(--char-height) * 0.55);  /* solo la parte que asoma sobre el recuadro */
+    padding-top: calc(var(--char-height) * 0.75);  /* espacio para el avatar sobre el recuadro */
     font-family: var(--font);
     background: transparent;
     overflow: hidden;
@@ -248,7 +248,7 @@ body {
     pointer-events: none;
 }
 #character-wrapper.char-show {
-    transform: translateY(-30px);   /* 30px sobre el borde del recuadro */
+    transform: translateY(-107px);  /* 30% de char-height más arriba */
 }
 #character-wrapper.char-hiding {
     transform: translateY(calc(var(--char-height) + 40px));
