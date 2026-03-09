@@ -3,14 +3,14 @@
 block_cipher = None
 
 a = Analysis(
-    ['generate_guide.py'],
+    ['generate_guide_entry.py'],
     pathex=[],
     binaries=[],
     datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['scripts/runtime_hook_guide.py'],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
