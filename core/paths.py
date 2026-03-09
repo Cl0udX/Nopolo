@@ -119,6 +119,19 @@ def get_app_base_dir() -> Path:
     return Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+def get_bundle_data_dir() -> Path:
+    """
+    Directorio donde están las carpetas editables empaquetadas con el build
+    (backgrounds/, voices/, sounds/, overlay/, config/).
+
+    - build : padre de _MEIPASS  ← build_executable.py las movió ahí afuera
+    - dev   : raíz del repositorio (mismo que get_app_base_dir)
+    """
+    if _is_frozen():
+        return Path(sys._MEIPASS).parent
+    return get_app_base_dir()
+
+
 # ──────────────────────────────────────────────
 # Directorio de datos de usuario (lectura/escritura)
 # ──────────────────────────────────────────────
@@ -525,14 +538,15 @@ def initialize_user_data() -> List[OverlayConflict]:
         logger.info("[paths] Modo DEV — usando archivos del proyecto directamente.")
         return []
 
-    user_dir   = get_user_data_dir()
-    app_dir    = get_app_base_dir()
-    bundle_ver = _get_bundle_version()
-    schema     = _load_schema_data()
-    user_ver   = schema.get("version", "0.0.0")
-    prev_hashes= schema.get("overlay_hashes", {})
+    user_dir    = get_user_data_dir()
+    bundle_dir  = get_bundle_data_dir()   # carpetas editables del paquete
+    bundle_ver  = _get_bundle_version()
+    schema      = _load_schema_data()
+    user_ver    = schema.get("version", "0.0.0")
+    prev_hashes = schema.get("overlay_hashes", {})
 
     logger.info(f"[paths] Modo: BUILD | bundle={bundle_ver} | usuario={user_ver}")
+    logger.info(f"[paths] Bundle data dir: {bundle_dir}")
     user_dir.mkdir(parents=True, exist_ok=True)
 
     if bundle_ver == user_ver:
@@ -547,26 +561,26 @@ def initialize_user_data() -> List[OverlayConflict]:
 
     # ── overlay/ : SMART REPLACE con hashes ─────────────────────────────────
     conflicts = _strategy_overlay_smart(
-        src=app_dir / "overlay",
+        src=bundle_dir / "overlay",
         dst=user_dir / "overlay",
         prev_bundle_hashes=prev_hashes
     )
 
     # ── config/ : MERGE SMART ────────────────────────────────────────────────
     _strategy_merge_config(
-        src=app_dir / "config",
+        src=bundle_dir / "config",
         dst=user_dir / "config"
     )
 
     # ── backgrounds/, sounds/, voices/ : ADD NEW FILES ───────────────────────
     for folder in ("backgrounds", "sounds", "voices"):
         _strategy_add_new_files(
-            src=app_dir / folder,
+            src=bundle_dir / folder,
             dst=user_dir / folder
         )
 
     # ── Guardar nueva versión + hashes actuales del bundle ───────────────────
-    new_hashes = _compute_bundle_overlay_hashes(app_dir / "overlay")
+    new_hashes = _compute_bundle_overlay_hashes(bundle_dir / "overlay")
     _save_schema_data(bundle_ver, new_hashes)
     logger.info(f"[paths] Migración completada → schema v{bundle_ver}")
 
@@ -581,15 +595,16 @@ def print_paths_info() -> None:
     """Imprime en consola las rutas activas para diagnóstico."""
     bundle_ver = _get_bundle_version()
     user_ver   = _get_user_schema_version() if get_run_mode() == "build" else bundle_ver
-    print("=" * 55)
+    print("=" * 57)
     print(f"  NOPOLO PATHS  |  Modo: {get_run_mode().upper()}")
     print(f"  Bundle v{bundle_ver}  |  Usuario v{user_ver}")
-    print("=" * 55)
-    print(f"  App base dir : {get_app_base_dir()}")
-    print(f"  User data dir: {get_user_data_dir()}")
-    print(f"  voices/      : {get_voices_dir()}")
-    print(f"  backgrounds/ : {get_backgrounds_dir()}")
-    print(f"  sounds/      : {get_sounds_dir()}")
-    print(f"  overlay/     : {get_overlay_dir()}")
-    print(f"  config/      : {get_config_dir()}")
-    print("=" * 55)
+    print("=" * 57)
+    print(f"  App base dir  : {get_app_base_dir()}")
+    print(f"  Bundle data   : {get_bundle_data_dir()}")
+    print(f"  User data dir : {get_user_data_dir()}")
+    print(f"  voices/       : {get_voices_dir()}")
+    print(f"  backgrounds/  : {get_backgrounds_dir()}")
+    print(f"  sounds/       : {get_sounds_dir()}")
+    print(f"  overlay/      : {get_overlay_dir()}")
+    print(f"  config/       : {get_config_dir()}")
+    print("=" * 57)
