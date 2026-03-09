@@ -16,6 +16,35 @@ from typing import Tuple, Optional
 import io
 
 
+def _find_python_executable() -> str:
+    """Resuelve el intérprete Python correcto (igual que en rvc_subprocess_persistent)."""
+    from core.paths import get_run_mode
+    if get_run_mode() == "dev":
+        return sys.executable
+    override = os.environ.get("NOPOLO_PYTHON", "").strip()
+    if override and os.path.isfile(override):
+        return override
+    try:
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            for levels_up in (3, 4, 5):
+                candidate_dir = os.path.normpath(
+                    os.path.join(meipass, *[".."] * levels_up))
+                for py_name in ("python3", "python"):
+                    for subdir in (".venv/bin", "venv/bin", "bin", ""):
+                        py_path = os.path.join(candidate_dir, subdir, py_name)
+                        if os.path.isfile(py_path):
+                            return py_path
+    except Exception:
+        pass
+    import shutil
+    for py_name in ("python3", "python"):
+        found = shutil.which(py_name)
+        if found:
+            return found
+    return sys.executable
+
+
 # Script que se ejecuta en el subproceso
 SUBPROCESS_SCRIPT = '''
 import sys
@@ -150,14 +179,33 @@ class SubprocessProcessor:
         os.close(temp_fd)
         
         try:
-            # Ejecutar subproceso
+            # Ejecutar subproceso con el Python correcto (no el binario compilado)
+            python_exe = _find_python_executable()
+            from core.paths import get_run_mode
+            if get_run_mode() == "build" or python_exe != sys.executable:
+                fd_s, script_path = tempfile.mkstemp(suffix="_nopolo_sub.py")
+                try:
+                    os.write(fd_s, SUBPROCESS_SCRIPT.encode("utf-8"))
+                finally:
+                    os.close(fd_s)
+                cmd = [python_exe, script_path, self.base_dir, message, temp_path]
+            else:
+                script_path = None
+                cmd = [python_exe, '-c', SUBPROCESS_SCRIPT,
+                       self.base_dir, message, temp_path]
+
             result = subprocess.run(
-                [sys.executable, '-c', SUBPROCESS_SCRIPT, 
-                 self.base_dir, message, temp_path],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=120  # 2 minutos máximo
             )
+
+            if script_path and os.path.exists(script_path):
+                try:
+                    os.unlink(script_path)
+                except Exception:
+                    pass
             
             # Mostrar logs del subproceso
             if result.stdout:

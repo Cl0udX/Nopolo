@@ -33,6 +33,63 @@ import numpy as np
 import soundfile as sf
 from typing import Tuple, Optional
 
+
+def _find_python_executable() -> str:
+    """
+    Devuelve la ruta al intérprete Python adecuado para lanzar subprocesos.
+
+    - En modo DEV  : sys.executable ya ES Python → lo usamos directamente.
+    - En modo BUILD: sys.executable es el binario compilado (Nopolo-1.1.0),
+                     no puede aceptar '-c script'. En este caso buscamos el
+                     Python del sistema / del venv que compiló la app.
+
+    Estrategia de búsqueda en modo BUILD:
+      1. Variable de entorno NOPOLO_PYTHON (permite override manual).
+      2. Python del venv detectado por PyInstaller (sys._MEIPASS/../../../bin/python).
+      3. 'python3' / 'python' en el PATH del sistema.
+    """
+    from core.paths import get_run_mode
+
+    if get_run_mode() == "dev":
+        return sys.executable  # En dev sys.executable sí es Python
+
+    # ── Modo BUILD ────────────────────────────────────────────────────────────
+
+    # 1. Override manual
+    override = os.environ.get("NOPOLO_PYTHON", "").strip()
+    if override and os.path.isfile(override):
+        return override
+
+    # 2. Buscar junto al bundle: el venv que lo compiló suele estar en
+    #    <dist_folder>/../../../  (relativo a _MEIPASS que es <dist>/Nopolo-x/_internal)
+    try:
+        import sys as _sys
+        meipass = getattr(_sys, "_MEIPASS", None)
+        if meipass:
+            # _internal → Nopolo-x → dist → workspace
+            for levels_up in (3, 4, 5):
+                candidate_dir = os.path.normpath(
+                    os.path.join(meipass, *[".."] * levels_up)
+                )
+                for py_name in ("python3", "python"):
+                    for subdir in (".venv/bin", "venv/bin", "bin", ""):
+                        py_path = os.path.join(candidate_dir, subdir, py_name)
+                        if os.path.isfile(py_path):
+                            return py_path
+    except Exception:
+        pass
+
+    # 3. Buscar en PATH del sistema
+    import shutil
+    for py_name in ("python3", "python"):
+        found = shutil.which(py_name)
+        if found:
+            return found
+
+    # Fallback: devolver sys.executable aunque no funcione para '-c'
+    # (al menos el error será claro)
+    return sys.executable
+
 # Capturar los streams REALES antes de que la GUI los redirija a widgets Qt.
 # Los relay threads DEBEN usar estos — llamar a sys.stdout desde un thread
 # de background cuando sys.stdout apunta a un QTextEdit causa heap corruption
@@ -248,12 +305,36 @@ class PersistentSubprocessProcessor:
         """
         Lanza un subproceso nuevo y arranca sus relay threads.
         Retorna el Popen inmediatamente (sin esperar READY).
+
+        En modo BUILD usa un archivo .py temporal en lugar de '-c script'
+        porque sys.executable es el binario compilado (no Python).
         """
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
+        # Asegurar que el worker subprocess también sepa que está en modo build
+        if "NOPOLO_ENV" not in env:
+            env["NOPOLO_ENV"] = "build"
+
+        python_exe = _find_python_executable()
+        _tprint(f"[PersistentProcessor] Python para worker: {python_exe}")
+
+        # En modo build sys.executable no acepta '-c': escribimos el script
+        # a un archivo temporal y lo ejecutamos como 'python worker.py base_dir'
+        from core.paths import get_run_mode
+        if get_run_mode() == "build" or python_exe != sys.executable:
+            # Escribir script worker a disco (se elimina después del arranque)
+            fd, script_path = tempfile.mkstemp(suffix="_nopolo_worker.py")
+            try:
+                os.write(fd, PERSISTENT_WORKER_SCRIPT.encode("utf-8"))
+            finally:
+                os.close(fd)
+            cmd = [python_exe, script_path, self.base_dir]
+        else:
+            script_path = None
+            cmd = [python_exe, "-c", PERSISTENT_WORKER_SCRIPT, self.base_dir]
 
         process = subprocess.Popen(
-            [sys.executable, "-c", PERSISTENT_WORKER_SCRIPT, self.base_dir],
+            cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -277,6 +358,12 @@ class PersistentSubprocessProcessor:
             except Exception:
                 pass
             finally:
+                # Limpiar script temporal si existe
+                if script_path and os.path.exists(script_path):
+                    try:
+                        os.unlink(script_path)
+                    except Exception:
+                        pass
                 proto_q.put("DIED|")
 
         # Relay stderr → stdout del padre (solo logs)
