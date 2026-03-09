@@ -232,6 +232,50 @@ Para más información, consulta el README.md principal.
         print(f"{Colors.WARNING}⚠ No se copió ningún archivo{Colors.ENDC}")
         return False
 
+def create_macos_launcher(dist_path: Path, exe_name: str) -> bool:
+    """
+    Crea un launcher .command para macOS que permite doble clic desde el Finder.
+    También aplica los permisos de ejecución al binario principal.
+    """
+    print(f"\n🍎 Creando launcher para macOS...")
+
+    # Asegurar permisos de ejecución en el binario
+    binary = dist_path / exe_name
+    if binary.exists():
+        binary.chmod(binary.stat().st_mode | 0o111)
+        print(f"{Colors.OKGREEN}   ✓ Permisos de ejecución aplicados: {exe_name}{Colors.ENDC}")
+
+    # Crear el .command
+    launcher_name = f"{__app_name__}.command"
+    launcher_path = dist_path / launcher_name
+    launcher_content = f"""#!/bin/bash
+# Launcher de {__app_name__} v{__version__} para macOS
+# Doble clic en este archivo desde el Finder para abrir la app.
+
+# Cambiar al directorio donde está este script (necesario para rutas relativas)
+cd "$(dirname "$0")"
+
+# Ejecutar Nopolo
+./{exe_name}
+"""
+    launcher_path.write_text(launcher_content, encoding="utf-8")
+    launcher_path.chmod(launcher_path.stat().st_mode | 0o111)
+    print(f"{Colors.OKGREEN}   ✓ Launcher creado: {launcher_name}{Colors.ENDC}")
+    print(f"{Colors.OKCYAN}   ℹ Doble clic en '{launcher_name}' para abrir Nopolo desde el Finder{Colors.ENDC}")
+
+    # Quitar el flag de cuarentena si existe (evita el warning "descargado de internet")
+    try:
+        subprocess.run(
+            ["xattr", "-dr", "com.apple.quarantine", str(dist_path)],
+            check=False, capture_output=True
+        )
+        print(f"{Colors.OKGREEN}   ✓ Flag de cuarentena eliminado (xattr){Colors.ENDC}")
+    except FileNotFoundError:
+        pass  # xattr no disponible, no es crítico
+
+    return True
+
+
 def build_executable(system_name, arch):
     """Ejecuta PyInstaller para generar el ejecutable"""
     print(f"\n📦 Generando ejecutable para {system_name} ({arch})...")
@@ -270,38 +314,64 @@ def show_output_info(system_name):
         print(f"{Colors.FAIL}❌ No se pudo verificar la salida{Colors.ENDC}")
         return
     
+    # Determinar nombre y ruta del ejecutable según plataforma
     if system_name == "windows":
-        exe_name = f'{__app_name__}-{__version__}.exe'
-        exe_path = dist_path / exe_name
-        
-        # Fallback
-        if not exe_path.exists():
-            exe_name = f'{__app_name__}.exe'
-            exe_path = dist_path / exe_name
-        
-        print(f"\n📁 Ejecutable generado en:")
-        print(f"   {exe_path.absolute()}")
-        
-        print(f"\n📦 Estructura final:")
-        print(f"   {dist_path}/")
-        print(f"   ├── {exe_name}          ← Ejecutable principal")
-        print(f"   ├── _internal/          ← Librerías Python")
-        print(f"   ├── backgrounds/        ← Fondos (nivel raíz) ✅")
-        print(f"   ├── voices/             ← Modelos RVC (nivel raíz) ✅")
-        print(f"   ├── sounds/             ← Efectos de sonido (nivel raíz) ✅")
-        print(f"   ├── overlay/            ← Overlay files (nivel raíz) ✅")
-        print(f"   ├── config/             ← Configuración (nivel raíz) ✅")
-        print(f"   ├── .env                ← Variables de entorno (si existe)")
-        print(f"   ├── .env.example        ← Ejemplo de configuración")
-        print(f"   ├── README.md           ← Documentación")
-        print(f"   └── LICENSE             ← Licencia")
-        
-        print(f"\n▶️  Para ejecutar:")
-        print(f"   1. Navega a: dist\\{dist_path.name}\\")
-        print(f"   2. Doble click en: {exe_name}")
-        
-        print(f"\n📦 Para distribuir:")
-        print(f"   Comprime la carpeta 'dist/{dist_path.name}' completa en ZIP")
+        exe_candidates = [
+            f'{__app_name__}-{__version__}.exe',
+            f'{__app_name__}.exe',
+        ]
+        run_hint = f"   1. Navega a: dist\\{dist_path.name}\\\n   2. Doble click en: {{exe_name}}"
+        dist_hint = f"   Comprime la carpeta 'dist/{dist_path.name}' completa en ZIP"
+    elif system_name == "macos":
+        exe_candidates = [
+            f'{__app_name__}-{__version__}',
+            f'{__app_name__}.app',
+            __app_name__,
+        ]
+        run_hint = (
+            f"   Opción A (doble clic): abre '{__app_name__}.command' desde el Finder\n"
+            f"   Opción B (Terminal):   cd dist/{dist_path.name} && ./{{exe_name}}"
+        )
+        dist_hint = f"   Comprime la carpeta 'dist/{dist_path.name}' completa en ZIP o crea un .dmg"
+    else:  # linux
+        exe_candidates = [
+            f'{__app_name__}-{__version__}',
+            __app_name__,
+        ]
+        run_hint = f"   1. Navega a: dist/{dist_path.name}/\n   2. Ejecuta: ./{{exe_name}}"
+        dist_hint = f"   Comprime la carpeta 'dist/{dist_path.name}' completa en tar.gz o ZIP"
+
+    exe_name = exe_candidates[0]
+    for candidate in exe_candidates:
+        if (dist_path / candidate).exists():
+            exe_name = candidate
+            break
+    exe_path = dist_path / exe_name
+
+    print(f"\n📁 Ejecutable generado en:")
+    print(f"   {exe_path.absolute()}")
+
+    print(f"\n📦 Estructura final:")
+    print(f"   {dist_path}/")
+    print(f"   ├── {exe_name:<28} ← Ejecutable principal")
+    if system_name == "macos":
+        print(f"   ├── {__app_name__ + '.command':<28} ← Doble clic para abrir (macOS) 🍎")
+    print(f"   ├── _internal/                   ← Librerías Python")
+    print(f"   ├── backgrounds/                 ← Fondos (nivel raíz) ✅")
+    print(f"   ├── voices/                      ← Modelos RVC (nivel raíz) ✅")
+    print(f"   ├── sounds/                      ← Efectos de sonido (nivel raíz) ✅")
+    print(f"   ├── overlay/                     ← Overlay files (nivel raíz) ✅")
+    print(f"   ├── config/                      ← Configuración (nivel raíz) ✅")
+    print(f"   ├── .env                         ← Variables de entorno (si existe)")
+    print(f"   ├── .env.example                 ← Ejemplo de configuración")
+    print(f"   ├── README.md                    ← Documentación")
+    print(f"   └── LICENSE                      ← Licencia")
+
+    print(f"\n▶️  Para ejecutar:")
+    print(run_hint.format(exe_name=exe_name))
+
+    print(f"\n📦 Para distribuir:")
+    print(dist_hint)
     
     # Tamaño del build
     if dist_path.exists():
@@ -363,15 +433,37 @@ def main():
     
     # Copiar archivos adicionales
     copy_additional_files()
-    
+
+    # En macOS: crear launcher .command para doble clic desde el Finder
+    if system_name == "macos":
+        _dist = find_dist_folder()
+        if _dist:
+            # Detectar nombre del ejecutable
+            for candidate in [f'{__app_name__}-{__version__}', __app_name__]:
+                if (_dist / candidate).exists():
+                    create_macos_launcher(_dist, candidate)
+                    break
+
     # Mostrar información final
     show_output_info(system_name)
     
-    print(f"\n{Colors.OKCYAN}💡 NOTA SOBRE GPU:{Colors.ENDC}")
-    print(f"   Si no detecta tu GPU RTX 5070 Ti:")
-    print(f"   1. Verifica que torch con CUDA esté instalado en el entorno")
-    print(f"   2. Las DLLs de CUDA deben estar en _internal/")
-    print(f"   3. Prueba ejecutar desde el código fuente primero")
+    if system_name == "windows":
+        print(f"\n{Colors.OKCYAN}💡 NOTA SOBRE GPU:{Colors.ENDC}")
+        print(f"   Si no detecta tu GPU:")
+        print(f"   1. Verifica que torch con CUDA esté instalado en el entorno")
+        print(f"   2. Las DLLs de CUDA deben estar en _internal/")
+        print(f"   3. Prueba ejecutar desde el código fuente primero")
+    elif system_name == "macos":
+        print(f"\n{Colors.OKCYAN}💡 NOTA SOBRE RENDIMIENTO (macOS Apple Silicon):{Colors.ENDC}")
+        print(f"   - RVC usará MPS (Metal Performance Shaders) si está disponible")
+        print(f"   - CUDA no está soportado en macOS")
+        print(f"   - Para mejor rendimiento, asegúrate de compilar con Python arm64")
+    else:  # linux
+        print(f"\n{Colors.OKCYAN}💡 NOTA SOBRE GPU (Linux):{Colors.ENDC}")
+        print(f"   Si no detecta tu GPU NVIDIA:")
+        print(f"   1. Verifica que torch con CUDA esté instalado en el entorno")
+        print(f"   2. Asegúrate de tener los drivers NVIDIA y CUDA toolkit instalados")
+        print(f"   3. Prueba ejecutar desde el código fuente primero")
     
     sys.exit(0)
 
