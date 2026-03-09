@@ -25,6 +25,7 @@ from gui.mainWindowComponents import (
     ControlsMixin,
     SystemConfigMixin,
     OverlayMixin,
+    UpdateMixin,
 )
 import sys
 
@@ -41,6 +42,7 @@ class MainWindow(
     ControlsMixin,
     SystemConfigMixin,
     OverlayMixin,
+    UpdateMixin,
     QWidget
 ):
     """Ventana principal de la aplicación Nopolo"""
@@ -116,6 +118,9 @@ class MainWindow(
         # Iniciar API si está habilitado (definido en APIMixin)
         if self.enable_api:
             self._start_api_server()
+
+        # Verificar actualizaciones en segundo plano (definido en UpdateMixin)
+        self._schedule_update_check(delay_ms=5000)
     
     def closeEvent(self, event):
         """Limpieza al cerrar la ventana"""

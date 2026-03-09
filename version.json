@@ -1,6 +1,14 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "app_name": "Nopolo",
   "author": "Cl0udX",
-  "description": "Voice Studio - Síntesis y conversión de voz con RVC"
+  "description": "Voice Studio - Síntesis y conversión de voz con RVC",
+  "update_url": "https://raw.githubusercontent.com/Cl0udX/Nopolo/main/version.json",
+  "downloads_base_url": "https://pub-b2d8e9c3fb894b55bfca2ac1281ce346.r2.dev",
+  "downloads": {
+    "macos":       "Nopolo-1.1.0-mac.zip",
+    "windows_cpu": "Nopolo-1.1.0-win-cpu.zip",
+    "windows_cuda124": "Nopolo-1.1.0-win-cuda124.zip",
+    "windows_cuda128": "Nopolo-1.1.0-win-cuda128.zip"
+  }
 }

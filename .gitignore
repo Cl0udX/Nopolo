@@ -32,8 +32,8 @@ config/sounds.json
 *service_account*.json
 *.pem
 *.key
-.env
 .env.local
+.env.upload
 *.secret
 
 # IDE
