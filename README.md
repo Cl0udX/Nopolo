@@ -32,7 +32,7 @@ El proyecto funciona **completamente local** en tu equipo, sin depender de servi
 | **macOS (M1/M2/M3)** | ✅ Optimizado | CPU | Parselmouth | Estable, ligeramente más lento |
 | **Windows/Linux sin GPU** | ✅ Funcional | CPU | RMVPE | Más lento pero funcional |
 
-> **Nota para usuarios de Mac:** Nopolo detecta automáticamente macOS y ajusta el procesamiento para evitar problemas con MPS. Usa el script `./run_nopolo_gui.sh` para mejor rendimiento.
+> **Nota para usuarios de Mac:** Nopolo detecta automáticamente macOS y ajusta el procesamiento para evitar problemas con MPS. Usa el script `./run_nopolo.sh` para mejor rendimiento.
 
 
 ---
@@ -160,7 +160,7 @@ StreamTTS/
 - [x] Filtros de fondo (ambiente/contexto durante la voz)
 - [x] Endpoint API `/synthesize/advanced` para mensajes complejos
 - [ ] Modulo de entrenamiento de modelos RVC personalizados
-- [ ] Optimización de latencia
+- [x] Optimización de latencia
 - [ ] Traduccion a otros idiomas (inglés, portugués, etc.)
 - [ ] Integración directa con Streamer.bot
 - [ ] Configuración avanzada desde la interfaz
