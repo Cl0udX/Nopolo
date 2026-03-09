@@ -16,18 +16,70 @@ La variable de entorno NOPOLO_ENV puede forzar el modo:
     NOPOLO_ENV=build  → fuerza modo build (útil para testing)
     NOPOLO_ENV=dev    → fuerza modo dev   (valor por defecto en desarrollo)
 
-Las carpetas de usuario que se gestionan son:
-    backgrounds/, voices/, sounds/, overlay/, config/
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SISTEMA DE MIGRACIÓN VERSIONADA CON HASHES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Cada vez que se lanza una nueva versión de la app, el sistema compara
+la versión del bundle contra la versión guardada en .schema_version.json.
+Si difieren, aplica la estrategia correcta según el tipo de carpeta:
+
+  backgrounds/   → ADD NEW FILES    : solo archivos nuevos, nunca sobreescribir.
+  sounds/
+  voices/
+
+  config/*.json  → MERGE SMART      : añade claves/entradas nuevas sin tocar
+                                       los valores del usuario.
+
+  overlay/       → SMART REPLACE con hashes:
+    Cada archivo del overlay se evalúa individualmente:
+
+    Caso A — Primera ejecución (sin archivo de usuario):
+      → Copiar directamente desde el bundle.
+
+    Caso B — El bundle cambió Y el usuario NO tocó el archivo
+      (hash_usuario == hash_bundle_anterior):
+      → Reemplazar silenciosamente. El usuario tendrá la versión nueva.
+
+    Caso C — El bundle cambió Y el usuario SÍ editó el archivo
+      (hash_usuario != hash_bundle_anterior):
+      → Renombrar el archivo del usuario a <nombre>.old
+      → Copiar la versión nueva del bundle
+      → Registrar en lista de notificaciones para mostrar popup al iniciar.
+
+    Caso D — El bundle NO cambió (hash_bundle_actual == hash_bundle_anterior):
+      → No tocar nada, independientemente de lo que tenga el usuario.
+
+Los hashes (SHA-256) del bundle se guardan en .schema_version.json
+después de cada migración, como referencia para la próxima actualización.
+
+La función initialize_user_data() devuelve una lista de OverlayConflict
+que main.py puede pasar a la GUI para mostrar el popup de notificación.
 """
 
 import os
 import sys
+import json
 import shutil
+import hashlib
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
+
+
+# ──────────────────────────────────────────────
+# Estructura de datos para notificaciones
+# ──────────────────────────────────────────────
+
+@dataclass
+class OverlayConflict:
+    """Representa un archivo del overlay que fue actualizado con conflicto."""
+    filename: str          # ej: "overlay.html"
+    old_path: Path         # ruta del .old que guardamos
+    new_path: Path         # ruta de la versión nueva del bundle
+    reason: str = ""       # descripción legible del cambio
 
 # ──────────────────────────────────────────────
 # Detección del modo de ejecución
@@ -83,7 +135,6 @@ def get_user_data_dir() -> Path:
     if get_run_mode() == "dev":
         return get_app_base_dir()
 
-    # ── Modo build ──
     platform = sys.platform
     if platform == "win32":
         appdata = os.getenv("APPDATA") or str(Path.home() / "AppData" / "Roaming")
@@ -138,80 +189,340 @@ def get_overlay_html() -> Path:
 
 
 # ──────────────────────────────────────────────
-# Lista de carpetas de usuario gestionadas
+# Versión de esquema y hashes del bundle
 # ──────────────────────────────────────────────
 
-# (nombre_en_bundle, ruta_destino_en_user_data)
-USER_DATA_FOLDERS = [
-    "backgrounds",
-    "voices",
-    "sounds",
-    "overlay",
-    "config",
-]
+_SCHEMA_VERSION_FILE = ".schema_version.json"
 
 
-# ──────────────────────────────────────────────
-# Inicialización: copiar archivos del bundle → user data
-# ──────────────────────────────────────────────
+def _file_sha256(path: Path) -> str:
+    """Calcula el hash SHA-256 de un archivo. Devuelve '' si no existe."""
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return ""
 
-def _copy_folder_defaults(src: Path, dst: Path) -> None:
+
+def _get_bundle_version() -> str:
+    """Lee la versión actual de la app desde version.json del bundle."""
+    try:
+        version_file = get_app_base_dir() / "version.json"
+        with open(version_file, "r", encoding="utf-8") as f:
+            return json.load(f).get("version", "0.0.0")
+    except Exception:
+        return "0.0.0"
+
+
+def _load_schema_data() -> dict:
     """
-    Copia de src a dst de forma incremental:
-    - Si dst no existe → copiar todo.
-    - Si dst existe → copiar solo archivos que NO existan en dst.
-    No sobreescribe archivos que el usuario ya tenga.
+    Carga el contenido completo de .schema_version.json del usuario.
+    Estructura:
+    {
+      "version": "1.1.0",
+      "overlay_hashes": {
+        "overlay.html": "<sha256>",
+        "overlay.css":  "<sha256>"
+      }
+    }
+    """
+    try:
+        schema_file = get_user_data_dir() / _SCHEMA_VERSION_FILE
+        with open(schema_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"version": "0.0.0", "overlay_hashes": {}}
+
+
+def _get_user_schema_version() -> str:
+    return _load_schema_data().get("version", "0.0.0")
+
+
+def _save_schema_data(version: str, overlay_hashes: dict) -> None:
+    """Guarda la versión y los hashes del bundle en .schema_version.json."""
+    try:
+        schema_file = get_user_data_dir() / _SCHEMA_VERSION_FILE
+        with open(schema_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {"version": version, "overlay_hashes": overlay_hashes},
+                f, indent=2
+            )
+    except Exception as e:
+        logger.warning(f"[paths] No se pudo guardar schema data: {e}")
+
+
+def _compute_bundle_overlay_hashes(src: Path) -> dict:
+    """Calcula los hashes SHA-256 de todos los archivos en el overlay del bundle."""
+    hashes = {}
+    if not src.exists():
+        return hashes
+    for item in src.rglob("*"):
+        if item.is_file():
+            rel = str(item.relative_to(src))
+            hashes[rel] = _file_sha256(item)
+    return hashes
+
+
+# ──────────────────────────────────────────────
+# Estrategias de migración
+# ──────────────────────────────────────────────
+
+def _strategy_overlay_smart(
+    src: Path,
+    dst: Path,
+    prev_bundle_hashes: dict
+) -> List[OverlayConflict]:
+    """
+    SMART REPLACE para overlay/ — evalúa cada archivo individualmente.
+
+    Casos:
+      A. Archivo no existe en usuario        → copiar directamente.
+      B. Bundle cambió, usuario NO lo tocó   → reemplazar silencioso.
+      C. Bundle cambió, usuario SÍ lo tocó   → renombrar a .old + copiar nuevo + notificar.
+      D. Bundle NO cambió                    → no tocar nada.
+
+    Devuelve lista de OverlayConflict (vacía si no hubo conflictos).
     """
     if not src.exists():
-        logger.warning(f"[paths] Carpeta fuente no encontrada: {src}")
-        return
+        logger.warning(f"[paths] overlay: fuente no encontrada: {src}")
+        return []
 
     dst.mkdir(parents=True, exist_ok=True)
+    conflicts: List[OverlayConflict] = []
 
+    for src_item in src.rglob("*"):
+        if not src_item.is_file():
+            continue
+
+        rel        = src_item.relative_to(src)
+        rel_str    = str(rel)
+        dst_item   = dst / rel
+        dst_item.parent.mkdir(parents=True, exist_ok=True)
+
+        hash_new_bundle  = _file_sha256(src_item)
+        hash_prev_bundle = prev_bundle_hashes.get(rel_str, "")
+        hash_user        = _file_sha256(dst_item) if dst_item.exists() else ""
+
+        bundle_changed = (hash_new_bundle != hash_prev_bundle)
+        user_edited    = (hash_user != hash_prev_bundle) and (hash_user != "")
+        first_run      = (hash_user == "")
+
+        if first_run:
+            # Caso A: primera vez
+            shutil.copy2(src_item, dst_item)
+            logger.info(f"[paths] overlay: instalado {rel_str}")
+
+        elif not bundle_changed:
+            # Caso D: nada cambió en el bundle → respetar al usuario
+            logger.debug(f"[paths] overlay: sin cambios en bundle para {rel_str}")
+
+        elif not user_edited:
+            # Caso B: bundle cambió, usuario no tocó → reemplazar silencioso
+            shutil.copy2(src_item, dst_item)
+            logger.info(f"[paths] overlay: actualizado {rel_str} (sin ediciones del usuario)")
+
+        else:
+            # Caso C: bundle cambió Y usuario editó → .old + notificar
+            old_path = dst_item.with_suffix(dst_item.suffix + ".old")
+            # Si ya existe un .old anterior, lo sobreescribimos
+            shutil.copy2(dst_item, old_path)
+            shutil.copy2(src_item, dst_item)
+            logger.info(
+                f"[paths] overlay: CONFLICTO en {rel_str} — "
+                f"versión del usuario guardada en {old_path.name}"
+            )
+            conflicts.append(OverlayConflict(
+                filename=rel_str,
+                old_path=old_path,
+                new_path=dst_item,
+            ))
+
+    return conflicts
+
+
+def _merge_json(src_file: Path, dst_file: Path) -> None:
+    """
+    MERGE SMART para un archivo JSON individual.
+    - Si el destino no existe → copiar directamente.
+    - Si existe → combinar recursivamente:
+        * Las claves nuevas del bundle se añaden con su valor por defecto.
+        * Las claves que el usuario ya tiene se preservan intactas.
+        * Para listas: se añaden entradas cuyo 'id'/'name' no exista.
+    """
+    if not src_file.exists():
+        return
+
+    dst_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if not dst_file.exists():
+        shutil.copy2(src_file, dst_file)
+        logger.info(f"[paths] merge: creado {dst_file.name}")
+        return
+
+    try:
+        with open(src_file, "r", encoding="utf-8") as f:
+            bundle_data = json.load(f)
+        with open(dst_file, "r", encoding="utf-8") as f:
+            user_data = json.load(f)
+
+        changed = _deep_merge(bundle_data, user_data)
+
+        with open(dst_file, "w", encoding="utf-8") as f:
+            json.dump(user_data, f, indent=2, ensure_ascii=False)
+
+        if changed:
+            logger.info(f"[paths] merge: actualizado {dst_file.name} con nuevas claves del bundle")
+        else:
+            logger.debug(f"[paths] merge: {dst_file.name} sin cambios necesarios")
+
+    except Exception as e:
+        logger.warning(f"[paths] merge: error en {dst_file.name}: {e}")
+
+
+def _deep_merge(bundle: dict, user: dict) -> bool:
+    """Fusiona bundle → user recursivamente. Solo añade, nunca sobreescribe."""
+    changed = False
+    for key, bundle_val in bundle.items():
+        if key not in user:
+            user[key] = bundle_val
+            logger.debug(f"[paths] merge: nueva clave '{key}' añadida")
+            changed = True
+        elif isinstance(bundle_val, dict) and isinstance(user[key], dict):
+            if _deep_merge(bundle_val, user[key]):
+                changed = True
+        elif isinstance(bundle_val, list) and isinstance(user[key], list):
+            if _merge_list(bundle_val, user[key]):
+                changed = True
+    return changed
+
+
+def _merge_list(bundle_list: list, user_list: list) -> bool:
+    """Añade a user_list entradas de bundle_list que no existan (por id/name)."""
+    changed = False
+    for bundle_item in bundle_list:
+        if isinstance(bundle_item, dict):
+            match_key = "id" if "id" in bundle_item else ("name" if "name" in bundle_item else None)
+            if match_key:
+                match_val = bundle_item[match_key]
+                exists = any(
+                    isinstance(u, dict) and u.get(match_key) == match_val
+                    for u in user_list
+                )
+            else:
+                exists = bundle_item in user_list
+        else:
+            exists = bundle_item in user_list
+
+        if not exists:
+            user_list.append(bundle_item)
+            logger.debug(f"[paths] merge-list: nueva entrada añadida")
+            changed = True
+    return changed
+
+
+def _strategy_add_new_files(src: Path, dst: Path) -> None:
+    """ADD NEW FILES — backgrounds/, sounds/, voices/. Nunca sobreescribir."""
+    if not src.exists():
+        return
+    dst.mkdir(parents=True, exist_ok=True)
     for item in src.rglob("*"):
         relative = item.relative_to(src)
         dest_item = dst / relative
-
         if item.is_dir():
             dest_item.mkdir(parents=True, exist_ok=True)
-        elif item.is_file():
+        elif item.is_file() and not dest_item.exists():
+            dest_item.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, dest_item)
+            logger.info(f"[paths] add-new: {relative}")
+
+
+def _strategy_merge_config(src: Path, dst: Path) -> None:
+    """MERGE SMART — para config/. Merge inteligente sobre cada JSON."""
+    if not src.exists():
+        return
+    dst.mkdir(parents=True, exist_ok=True)
+    for item in src.rglob("*.json"):
+        relative = item.relative_to(src)
+        _merge_json(item, dst / relative)
+    for item in src.rglob("*"):
+        if item.is_file() and item.suffix != ".json":
+            relative = item.relative_to(src)
+            dest_item = dst / relative
             if not dest_item.exists():
                 dest_item.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, dest_item)
-                logger.debug(f"[paths] Copiado: {relative}")
-            # Si ya existe → no tocar (preservar cambios del usuario)
 
 
-def initialize_user_data() -> None:
+# ──────────────────────────────────────────────
+# Inicialización y migración principal
+# ──────────────────────────────────────────────
+
+def initialize_user_data() -> List[OverlayConflict]:
     """
-    Punto de entrada principal.
-    Llama a esto desde main.py al arrancar la aplicación.
+    Punto de entrada principal. Llama a esto desde main.py al arrancar.
 
-    - En modo dev: no hace nada (usa archivos del proyecto).
-    - En modo build: copia las carpetas del bundle a user_data_dir si no existen.
+    Devuelve una lista de OverlayConflict que main.py puede pasar a la GUI
+    para mostrar el popup de notificación (lista vacía = sin conflictos).
+
+    - En modo dev : no hace nada.
+    - En modo build:
+        1. Primera ejecución → instala archivos por defecto.
+        2. Actualización detectada → aplica migración por carpeta.
+        3. Sin cambios → no toca nada.
     """
-    mode = get_run_mode()
-    user_dir = get_user_data_dir()
-    app_dir  = get_app_base_dir()
-
-    logger.info(f"[paths] Modo: {mode}")
-    logger.info(f"[paths] Directorio usuario: {user_dir}")
-    logger.info(f"[paths] Directorio app:     {app_dir}")
-
-    if mode == "dev":
+    if get_run_mode() == "dev":
         logger.info("[paths] Modo DEV — usando archivos del proyecto directamente.")
-        return
+        return []
 
-    # Modo build: asegurar que las carpetas de usuario existen
+    user_dir   = get_user_data_dir()
+    app_dir    = get_app_base_dir()
+    bundle_ver = _get_bundle_version()
+    schema     = _load_schema_data()
+    user_ver   = schema.get("version", "0.0.0")
+    prev_hashes= schema.get("overlay_hashes", {})
+
+    logger.info(f"[paths] Modo: BUILD | bundle={bundle_ver} | usuario={user_ver}")
     user_dir.mkdir(parents=True, exist_ok=True)
 
-    for folder in USER_DATA_FOLDERS:
-        src = app_dir / folder
-        dst = user_dir / folder
-        logger.info(f"[paths] Verificando carpeta '{folder}'...")
-        _copy_folder_defaults(src, dst)
+    if bundle_ver == user_ver:
+        logger.info("[paths] Sin actualizaciones pendientes.")
+        return []
 
-    logger.info("[paths] Inicialización de datos de usuario completada.")
+    is_first = (user_ver == "0.0.0")
+    logger.info(
+        "[paths] Primera ejecución — instalando archivos..." if is_first
+        else f"[paths] Actualización {user_ver} → {bundle_ver}"
+    )
+
+    # ── overlay/ : SMART REPLACE con hashes ─────────────────────────────────
+    conflicts = _strategy_overlay_smart(
+        src=app_dir / "overlay",
+        dst=user_dir / "overlay",
+        prev_bundle_hashes=prev_hashes
+    )
+
+    # ── config/ : MERGE SMART ────────────────────────────────────────────────
+    _strategy_merge_config(
+        src=app_dir / "config",
+        dst=user_dir / "config"
+    )
+
+    # ── backgrounds/, sounds/, voices/ : ADD NEW FILES ───────────────────────
+    for folder in ("backgrounds", "sounds", "voices"):
+        _strategy_add_new_files(
+            src=app_dir / folder,
+            dst=user_dir / folder
+        )
+
+    # ── Guardar nueva versión + hashes actuales del bundle ───────────────────
+    new_hashes = _compute_bundle_overlay_hashes(app_dir / "overlay")
+    _save_schema_data(bundle_ver, new_hashes)
+    logger.info(f"[paths] Migración completada → schema v{bundle_ver}")
+
+    return conflicts
 
 
 # ──────────────────────────────────────────────
@@ -220,8 +531,11 @@ def initialize_user_data() -> None:
 
 def print_paths_info() -> None:
     """Imprime en consola las rutas activas para diagnóstico."""
+    bundle_ver = _get_bundle_version()
+    user_ver   = _get_user_schema_version() if get_run_mode() == "build" else bundle_ver
     print("=" * 55)
     print(f"  NOPOLO PATHS  |  Modo: {get_run_mode().upper()}")
+    print(f"  Bundle v{bundle_ver}  |  Usuario v{user_ver}")
     print("=" * 55)
     print(f"  App base dir : {get_app_base_dir()}")
     print(f"  User data dir: {get_user_data_dir()}")

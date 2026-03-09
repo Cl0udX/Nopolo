@@ -62,7 +62,7 @@ load_dotenv()
 # NOPOLO_ENV pueda ser leída desde el .env
 # ============================================================
 from core.paths import initialize_user_data, print_paths_info
-initialize_user_data()
+overlay_conflicts = initialize_user_data()
 print_paths_info()
 
 def get_env_bool(key: str, default: bool = False) -> bool:
@@ -256,6 +256,9 @@ Configuración en .env para personalizar rutas y puertos.
             # Cuando el splash termine, mostrar la ventana principal
             def show_main_window():
                 window.show()
+                # Mostrar popup de conflictos de overlay si los hay
+                if overlay_conflicts:
+                    window.show_overlay_conflicts(overlay_conflicts)
             
             splash.loading_finished.connect(show_main_window)
         
@@ -305,6 +308,8 @@ Configuración en .env para personalizar rutas y puertos.
             # Cuando el splash termine, mostrar la ventana principal
             def show_main_window():
                 window.show()
+                if overlay_conflicts:
+                    window.show_overlay_conflicts(overlay_conflicts)
             
             splash.loading_finished.connect(show_main_window)
         

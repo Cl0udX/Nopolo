@@ -5,7 +5,7 @@ Contiene métodos para verificar conexión a internet y configurar dispositivos 
 import os
 import sys
 import subprocess
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QMessageBox
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QMessageBox, QTextEdit, QGroupBox
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from core.app_config import get_app_config
@@ -204,3 +204,96 @@ class SystemConfigMixin:
                 "Error",
                 f"No se pudo abrir la carpeta de usuario:\n{str(e)}"
             )
+
+    def show_overlay_conflicts(self, conflicts: list) -> None:
+        """
+        Muestra un diálogo informando que algunos archivos del overlay
+        fueron actualizados pero el usuario tenía versiones editadas.
+        La versión del usuario se guardó como .old para que no pierda su trabajo.
+        """
+        if not conflicts:
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🔄 Actualización del Overlay")
+        dialog.resize(580, 420)
+        layout = QVBoxLayout()
+
+        # ── Encabezado ──────────────────────────────────────────────────────
+        title = QLabel("📦 Nopolo se ha actualizado")
+        title_font = QFont()
+        title_font.setPointSize(13)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        layout.addWidget(title)
+
+        subtitle = QLabel(
+            "Se detectaron cambios en los archivos del overlay que tú también habías editado.\n"
+            "Tu versión fue guardada con extensión <b>.old</b> y se instaló la versión nueva."
+        )
+        subtitle.setWordWrap(True)
+        subtitle.setStyleSheet("color: #ccc; margin-bottom: 8px;")
+        layout.addWidget(subtitle)
+
+        # ── Lista de archivos afectados ─────────────────────────────────────
+        group = QGroupBox("Archivos con conflicto")
+        group_layout = QVBoxLayout()
+
+        for conflict in conflicts:
+            item_label = QLabel(
+                f"  📄 <b>{conflict.filename}</b><br>"
+                f"  <span style='color:#aaa; font-size:11px;'>"
+                f"Tu versión guardada: {conflict.old_path.name}"
+                f"</span>"
+            )
+            item_label.setStyleSheet(
+                "padding: 6px 10px; "
+                "background: #2a2a2a; "
+                "border-radius: 4px; "
+                "margin: 2px 0;"
+            )
+            item_label.setTextFormat(Qt.TextFormat.RichText)
+            group_layout.addWidget(item_label)
+
+        group.setLayout(group_layout)
+        layout.addWidget(group)
+
+        # ── Mensaje de ayuda ────────────────────────────────────────────────
+        help_text = QLabel(
+            "💡 <b>¿Qué hacer?</b><br>"
+            "• Puedes abrir tu carpeta de usuario para comparar los archivos.<br>"
+            "• Si quieres restaurar tu versión, renombra el <code>.old</code> "
+            "de vuelta al nombre original.<br>"
+            "• Si prefieres la versión nueva, simplemente elimina el <code>.old</code>."
+        )
+        help_text.setWordWrap(True)
+        help_text.setTextFormat(Qt.TextFormat.RichText)
+        help_text.setStyleSheet(
+            "background: #1e3a1e; border: 1px solid #2e6b2e; "
+            "border-radius: 6px; padding: 10px; color: #aee8ae;"
+        )
+        layout.addWidget(help_text)
+
+        # ── Botones ─────────────────────────────────────────────────────────
+        btn_layout = QHBoxLayout()
+
+        open_folder_btn = QPushButton("📂 Abrir Carpeta de Usuario")
+        open_folder_btn.clicked.connect(lambda: (self._open_user_data_folder(), dialog.accept()))
+        btn_layout.addWidget(open_folder_btn)
+
+        ok_btn = QPushButton("✅ Entendido")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(dialog.accept)
+        btn_layout.addWidget(ok_btn)
+
+        layout.addLayout(btn_layout)
+        dialog.setLayout(layout)
+
+        # Log en consola también
+        for conflict in conflicts:
+            self.log_to_console(
+                f"⚠️ Overlay actualizado: {conflict.filename} "
+                f"(tu versión guardada como {conflict.old_path.name})"
+            )
+
+        dialog.exec()
