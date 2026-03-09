@@ -6,6 +6,7 @@ Envía eventos en tiempo real para integración con OBS Browser Source
 import asyncio
 import json
 import logging
+from pathlib import Path
 from typing import Set
 from aiohttp import web
 import aiohttp
@@ -25,12 +26,17 @@ class WebSocketServer:
         self.current_text = ""
         self.current_voice = ""
         self.is_speaking = False
-        
+
+        # Rutas absolutas para servir archivos estáticos
+        from core.paths import get_app_base_dir, get_overlay_dir
+        overlay_dir = get_overlay_dir()
+        assets_dir  = get_app_base_dir() / "assets"
+
         # Configurar rutas
         self.app.router.add_get('/ws', self.websocket_handler)
         self.app.router.add_get('/overlay', self.overlay_handler)
-        self.app.router.add_static('/static', './overlay', name='static')
-        self.app.router.add_static('/assets', './assets', name='assets')
+        self.app.router.add_static('/static', str(overlay_dir), name='static')
+        self.app.router.add_static('/assets', str(assets_dir), name='assets')
     
     async def start(self):
         """Inicia el servidor WebSocket"""
