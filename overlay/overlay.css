@@ -229,10 +229,9 @@ body {
 }
 
 #character-wrapper {
-    /* Absolute dentro de #av-row: el borde derecho queda alineado
-       con el borde derecho del overlay, sin sobresalir. */
+    /* right se calcula dinámicamente en JS (min(200px, 25% del ancho del overlay)) */
     position: absolute;
-    right: 200px;
+    right: 0;
     bottom: 0;
     height: var(--char-height);
     width: auto;

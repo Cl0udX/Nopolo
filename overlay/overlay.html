@@ -171,17 +171,49 @@
         const charWrapper = document.getElementById('character-wrapper');
         const charIdle    = document.getElementById('char-idle');
         const charTalking = document.getElementById('char-talking');
-        let   charHideTimeout = null;
+        let   charHideTimeout    = null;
+        let   charCrossfadeTimer = null;
 
         function showCharacter(name, idleSrc, talkingSrc) {
-            if (charHideTimeout) { clearTimeout(charHideTimeout); charHideTimeout = null; }
-            if (idleSrc)    charIdle.src    = idleSrc;
-            if (talkingSrc) charTalking.src = talkingSrc;
-            // Estado inicial: boca cerrada
-            charIdle.classList.add('char-active');
-            charTalking.classList.remove('char-active');
-            charWrapper.classList.remove('char-hidden', 'char-hiding');
-            charWrapper.classList.add('char-show');
+            if (charHideTimeout)    { clearTimeout(charHideTimeout);    charHideTimeout    = null; }
+            if (charCrossfadeTimer) { clearTimeout(charCrossfadeTimer); charCrossfadeTimer = null; }
+
+            // ── Posición horizontal dinámica: proporcional al ancho del recuadro de texto
+            // min(200px, 25% del ancho) → mismo look en textos largos, correcto en cortos.
+            const dynamicRight = Math.min(200, Math.floor(container.offsetWidth * 0.25));
+            charWrapper.style.right = dynamicRight + 'px';
+
+            const isVisible = charWrapper.classList.contains('char-show') ||
+                              charWrapper.classList.contains('char-hiding');
+
+            function applyImages() {
+                if (idleSrc)    charIdle.src    = idleSrc;
+                if (talkingSrc) charTalking.src = talkingSrc;
+                charIdle.classList.add('char-active');
+                charTalking.classList.remove('char-active');
+                charWrapper.classList.remove('char-hidden', 'char-hiding');
+                charWrapper.classList.add('char-show');
+            }
+
+            if (isVisible) {
+                // Crossfade suave al cambiar de personaje
+                charWrapper.style.transition = 'opacity 0.12s ease-in';
+                charWrapper.style.opacity    = '0';
+                charCrossfadeTimer = setTimeout(() => {
+                    charCrossfadeTimer = null;
+                    applyImages();
+                    charWrapper.style.transition = 'opacity 0.15s ease-out';
+                    charWrapper.style.opacity    = '1';
+                    setTimeout(() => {
+                        charWrapper.style.transition = '';
+                        charWrapper.style.opacity    = '';
+                    }, 150);
+                }, 130);
+            } else {
+                charWrapper.style.transition = '';
+                charWrapper.style.opacity    = '';
+                applyImages();
+            }
         }
 
         function hideCharacter() {
