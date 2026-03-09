@@ -2,6 +2,9 @@
 Mixin para configuración del sistema y utilidades.
 Contiene métodos para verificar conexión a internet y configurar dispositivos de audio.
 """
+import os
+import sys
+import subprocess
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QMessageBox
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
@@ -160,6 +163,7 @@ class SystemConfigMixin:
             import sounddevice as sd
             from core.app_config import get_app_config
             
+            
             app_config = get_app_config()
             device_id = app_config.get_audio_device()
             
@@ -178,3 +182,25 @@ class SystemConfigMixin:
         except Exception as e:
             self.log_to_console(f"Error cargando configuración de audio: {e}")
 
+    def _open_user_data_folder(self):
+        """Abre el explorador de archivos en la carpeta de datos del usuario."""
+        try:
+            from core.paths import get_user_data_dir
+            user_dir = get_user_data_dir()
+            user_dir.mkdir(parents=True, exist_ok=True)
+            path_str = str(user_dir)
+
+            if sys.platform == "win32":
+                os.startfile(path_str)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path_str])
+            else:
+                subprocess.Popen(["xdg-open", path_str])
+
+            self.log_to_console(f"📂 Abriendo carpeta de usuario: {path_str}")
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"No se pudo abrir la carpeta de usuario:\n{str(e)}"
+            )

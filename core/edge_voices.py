@@ -7,11 +7,13 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import edge_tts
+from core.paths import get_edge_voices_config
 
 load_dotenv()
 
-# Ruta al JSON de voces desde .env
-VOICES_JSON_PATH = Path(os.getenv("EDGE_VOICES_JSON", "config/edge_voices.json"))
+# Ruta al JSON de voces — usa paths.py o variable de entorno como override
+_env_override = os.getenv("EDGE_VOICES_JSON", "")
+VOICES_JSON_PATH = Path(_env_override) if _env_override else get_edge_voices_config()
 
 
 async def get_all_voices():

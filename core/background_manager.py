@@ -19,18 +19,21 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 import numpy as np
 from pydub import AudioSegment
+from core.paths import get_backgrounds_config, get_backgrounds_dir
 
 
 class BackgroundManager:
     """Gestor de fondos de audio para mezclar con voces."""
     
-    def __init__(self, config_path: str = "config/backgrounds.json"):
+    def __init__(self, config_path: str = None):
         """
         Inicializa el gestor de fondos.
         
         Args:
             config_path: Ruta al archivo de configuración de fondos
         """
+        if config_path is None:
+            config_path = str(get_backgrounds_config())
         self.config_path = config_path
         self.backgrounds: Dict[str, Dict] = {}
         self.backgrounds_by_id: Dict[str, Dict] = {}

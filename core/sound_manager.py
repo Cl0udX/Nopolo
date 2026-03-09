@@ -11,6 +11,7 @@ from typing import Dict, Optional, List
 from pathlib import Path
 import soundfile as sf
 import numpy as np
+from core.paths import get_sounds_dir, get_sounds_config
 
 
 class SoundManager:
@@ -32,7 +33,7 @@ class SoundManager:
     }
     """
     
-    def __init__(self, sounds_dir: str = "sounds", config_file: str = "config/sounds.json"):
+    def __init__(self, sounds_dir: str = None, config_file: str = None):
         """
         Inicializa el gestor de sonidos.
         
@@ -40,8 +41,8 @@ class SoundManager:
             sounds_dir: Directorio donde están los archivos de sonido
             config_file: Archivo JSON con la configuración de sonidos
         """
-        self.sounds_dir = Path(sounds_dir)
-        self.config_file = Path(config_file)
+        self.sounds_dir = Path(sounds_dir) if sounds_dir else get_sounds_dir()
+        self.config_file = Path(config_file) if config_file else get_sounds_config()
         
         # Mapas de ID -> info y nombre -> info
         self.sounds_by_id: Dict[str, Dict] = {}

@@ -6,12 +6,15 @@ import json
 import os
 from typing import Dict, Optional, List
 from pathlib import Path
+from core.paths import get_providers_config
 
 
 class ProviderManager:
     """Administra los proveedores TTS disponibles en la aplicación"""
     
-    def __init__(self, config_path: str = "config/providers.json"):
+    def __init__(self, config_path: str = None):
+        if config_path is None:
+            config_path = str(get_providers_config())
         self.config_path = config_path
         self.providers: Dict[str, dict] = {}
         

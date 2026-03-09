@@ -6,12 +6,15 @@ Guarda preferencias como dispositivo de audio, última voz usada, etc.
 import json
 import os
 from typing import Optional
+from core.paths import get_app_settings_config
 
 
 class AppConfig:
     """Gestor de configuración de la aplicación"""
     
-    def __init__(self, config_path: str = "config/app_settings.json"):
+    def __init__(self, config_path: str = None):
+        if config_path is None:
+            config_path = str(get_app_settings_config())
         self.config_path = config_path
         self.settings = {}
         self._load()

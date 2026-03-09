@@ -311,6 +311,15 @@ class UIBuilderMixin:
         self.audio_device_btn.clicked.connect(self._open_audio_device_settings)
         app_config_layout.addWidget(self.audio_device_btn)
         
+        # Botón para abrir carpeta de datos del usuario
+        self.user_data_btn = QPushButton("📂 Carpeta de Usuario")
+        self.user_data_btn.setToolTip(
+            "Abre la carpeta donde se guardan tus voces, fondos,\n"
+            "sonidos, overlay y configuración"
+        )
+        self.user_data_btn.clicked.connect(self._open_user_data_folder)
+        app_config_layout.addWidget(self.user_data_btn)
+        
         # Indicador de conexión a internet
         connection_layout = QHBoxLayout()
         self.connection_indicator = QLabel("●")

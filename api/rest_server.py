@@ -10,6 +10,7 @@ import uvicorn
 import threading
 from datetime import datetime
 
+from version import __version__
 from core.voice_manager import VoiceManager
 from core.audio_queue import AudioQueue
 from core.tts_engine import TTSEngine
@@ -113,7 +114,7 @@ class TTSAPIServer:
         self.app = FastAPI(
             title="Nopolo TTS API",
             description="API REST para Text-to-Speech con transformadores de voz RVC",
-            version="1.0.0",
+            version=__version__,
             docs_url="/docs",
             redoc_url="/redoc"
         )
@@ -282,7 +283,7 @@ class TTSAPIServer:
             """Endpoint raíz con información del servicio"""
             return {
                 "service": "Nopolo TTS API",
-                "version": "1.0.0",
+                "version": __version__,
                 "status": "running",
                 "endpoints": {
                     "tts": "/api/tts",

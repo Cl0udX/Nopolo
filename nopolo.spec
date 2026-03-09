@@ -5,11 +5,15 @@ Genera un ejecutable standalone para Windows
 """
 import sys
 import os
+import json
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-# Importar la versión del proyecto
+# Importar la versión del proyecto desde version.json
 sys.path.insert(0, os.path.abspath('.'))
-from version import __version__, __app_name__
+with open(os.path.join(os.path.abspath('.'), 'version.json'), 'r', encoding='utf-8') as _vf:
+    _vdata = json.load(_vf)
+__version__ = _vdata['version']
+__app_name__ = _vdata['app_name']
 
 block_cipher = None
 
@@ -118,7 +122,9 @@ def copytree_for_bundle(src, dst):
             datas.append((src_file, os.path.dirname(dst_file)))
             print(f"  → Agregando: {src_file} → {dst_file}")
 
-# Copiar carpetas que irán a _internal (luego el script las mueve)
+# Copiar carpetas que irán al bundle interno (_internal)
+# En modo BUILD estas carpetas se copian a AppData/Library del usuario
+# al primer inicio (ver core/paths.py - initialize_user_data)
 print("\n📦 Copiando carpetas al bundle...")
 copytree_for_bundle('backgrounds', 'backgrounds')
 copytree_for_bundle('voices', 'voices')
@@ -139,6 +145,7 @@ datas += [
     ('rvc', 'rvc'),
     ('scripts', 'scripts'),
     ('version.py', '.'),
+    ('version.json', '.'),    # Fuente de verdad de versión
 ]
 
 # Binarios adicionales (DLLs de CUDA/Torch)
@@ -158,7 +165,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['scripts/runtime_hook_nopolo.py'],
     excludes=[
         'matplotlib',
         'PIL',

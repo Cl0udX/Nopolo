@@ -110,7 +110,9 @@ class WebSocketServer:
     async def overlay_handler(self, request):
         """Sirve la página HTML del overlay"""
         try:
-            with open('./overlay/overlay.html', 'r', encoding='utf-8') as f:
+            from core.paths import get_overlay_html
+            overlay_path = get_overlay_html()
+            with open(str(overlay_path), 'r', encoding='utf-8') as f:
                 html_content = f.read()
             return web.Response(text=html_content, content_type='text/html')
         except FileNotFoundError:

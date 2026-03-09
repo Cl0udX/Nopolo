@@ -56,6 +56,15 @@ from PySide6.QtCore import Qt
 # Cargar variables de entorno
 load_dotenv()
 
+# ============================================================
+# INICIALIZACIÓN DE RUTAS DE USUARIO
+# Debe ejecutarse justo después de load_dotenv() para que
+# NOPOLO_ENV pueda ser leída desde el .env
+# ============================================================
+from core.paths import initialize_user_data, print_paths_info
+initialize_user_data()
+print_paths_info()
+
 def get_env_bool(key: str, default: bool = False) -> bool:
     """Helper para leer booleanos del .env"""
     value = os.getenv(key, str(default)).lower()

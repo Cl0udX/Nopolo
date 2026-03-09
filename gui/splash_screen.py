@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, QTimer, Signal, QRect
 from PySide6.QtGui import QPixmap, QFont, QPainter, QPen, QColor
 import os
 import time
+from version import __version__
 
 
 class OutlinedLabel(QLabel):
@@ -154,7 +155,7 @@ class SplashScreen(QSplashScreen):
         """)
         layout.addWidget(self.progress_bar)
         
-        credits_label = OutlinedLabel("Version: 1.0.0")
+        credits_label = OutlinedLabel(f"Version: {__version__}")
         credits_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         credits_label.setStyleSheet("""
             QLabel {

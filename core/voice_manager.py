@@ -7,12 +7,15 @@ import os
 from typing import Dict, List, Optional
 from pathlib import Path
 from .models import VoiceProfile, EdgeTTSConfig, RVCConfig
+from core.paths import get_voices_config
 
 
 class VoiceManager:
     """Administrador central de voces"""
     
-    def __init__(self, config_path: str = "config/voices.json"):
+    def __init__(self, config_path: str = None):
+        if config_path is None:
+            config_path = str(get_voices_config())
         self.config_path = config_path
         self.profiles: Dict[str, VoiceProfile] = {}
         self.default_voice_id: Optional[str] = None
@@ -215,11 +218,15 @@ class VoiceManager:
             print(f"Error cargando configuración: {e}")
             self._create_default_config()
     
-    def scan_rvc_models(self, voices_dir: str = "voices") -> List[str]:
+    def scan_rvc_models(self, voices_dir: str = None) -> List[str]:
         """
         Escanea el directorio voices/ en busca de nuevos modelos .pth
         que no estén registrados.
         """
+        from core.paths import get_voices_dir
+        if voices_dir is None:
+            voices_dir = str(get_voices_dir())
+
         new_models = []
         
         if not os.path.exists(voices_dir):

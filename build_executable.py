@@ -16,8 +16,16 @@ from pathlib import Path
 try:
     from version import __version__, __app_name__
 except ImportError:
-    __version__ = "1.0.0"
-    __app_name__ = "Nopolo"
+    import json, os
+    _vf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.json")
+    try:
+        with open(_vf, "r", encoding="utf-8") as f:
+            _vdata = json.load(f)
+        __version__ = _vdata["version"]
+        __app_name__ = _vdata["app_name"]
+    except Exception:
+        __version__ = "0.0.0"
+        __app_name__ = "Nopolo"
 
 # Colores para terminal
 class Colors:
