@@ -25,7 +25,8 @@ class TTSRequest(BaseModel):
     text: str = Field(..., description="Texto a sintetizar", min_length=1, max_length=5000)
     voice_id: Optional[str] = Field(None, description="ID del perfil de voz (usa default si no se especifica)")
     priority: Optional[int] = Field(0, description="Prioridad en la cola (mayor = más prioritario)")
-    author: Optional[str] = Field(None, description="Nombre del usuario que envió el mensaje (se muestra en overlay)")    max_segments: Optional[int] = Field(None, description="Límite de segmentos de voz a procesar (solo multivoice)")
+    author: Optional[str] = Field(None, description="Nombre del usuario que envió el mensaje (se muestra en overlay)")
+    max_segments: Optional[int] = Field(None, description="Límite de segmentos de voz a procesar (solo multivoice)")
     class Config:
         json_schema_extra = {
             "example": {
