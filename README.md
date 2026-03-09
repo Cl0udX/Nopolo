@@ -248,6 +248,9 @@ O la mejor opción es usar la interfaz gráfica de configuración.
 Puede usar el siguiente enlace para descargar contenido para Nopolo (Audios y Fondos):
 [Descargar contenido para Nopolo (Google Drive)](https://drive.google.com/drive/folders/1rBW0eycWrFqZbRiXQYjJFG-CNH-ej5MU?usp=sharing)
 
+Aqui puede encontrar algunas voces entrenadas por mi para usar con Nopolo:
+[Modelos de voz para Nopolo (Google Drive)](https://drive.google.com/drive/folders/1B6GrZ4XPcpPiMGj0c9rEuvfxuvaP8BKz?usp=sharing)
+
 ### Scripts de Prueba
 
 **Generar fondos de prueba:**
