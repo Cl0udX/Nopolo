@@ -353,4 +353,11 @@ Cuando ejecutas con API habilitada:
 
 ---
 
-// https://www.streamweasels.com/tools/convert-twitch-username-%20to-user-id/ para encontrar o ID do canal, necessário para filtrar os emotes do Twitch.
+// Puede encontrar modelos de voz RVC en sitios como:
+- [Modelos libres de voz RVC](https://voice-models.com/)
+
+// Para generar tus propios modelos RVC personalizados, puedes usar herramientas como:
+- [Applio](https://applio.org/)
+
+// Para encontrar el id de un canal de Twitch (necesario para filtrar emotes):
+- [Convertidor de nombre de usuario Twitch a ID](https://www.streamweasels.com/tools/convert-twitch-username-%20to-user-id/)
