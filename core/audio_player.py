@@ -23,16 +23,24 @@ def stop_audio():
     _stop_flag = True
     sd.stop()
 
-def play_wav(wav_tuple):
+def play_wav(wav_tuple, on_before_play=None, on_after_play=None):
     """
     Reproduce audio desde una tupla (wav_data, sample_rate)
     wav_data: numpy array normalizado en float32 (-1.0 a 1.0)
     sample_rate: frecuencia de muestreo en Hz
+    on_before_play: callback invocado dentro del lock ANTES de sd.play()
+    on_after_play:  callback invocado dentro del lock DESPUÉS de reproducir
     """
     global _stop_flag, _current_stream, _playback_lock
     
     # Usar lock para evitar reproducciones simultáneas (previene crashes)
     with _playback_lock:
+        # Notificar al caller que la reproducción está comenzando (dentro del lock)
+        if on_before_play:
+            try:
+                on_before_play()
+            except Exception:
+                pass
         # Resetear flag al inicio
         _stop_flag = False
         
@@ -89,13 +97,19 @@ def play_wav(wav_tuple):
         finally:
             _current_stream = None
             _stop_flag = False
+            if on_after_play:
+                try:
+                    on_after_play()
+                except Exception:
+                    pass
 
 
 # ── Reproducción con detección de peaks para avatar ──────────────────────────
 
 def play_wav_with_peaks(wav_tuple, on_peak=None,
                         peak_interval_ms: int = 40,
-                        peak_threshold: float = 0.05):
+                        peak_threshold: float = 0.05,
+                        on_before_play=None, on_after_play=None):
     """
     Como play_wav() pero dispara on_peak(is_talking: bool) cada peak_interval_ms
     sincronizado con la reproducción real.
@@ -105,10 +119,18 @@ def play_wav_with_peaks(wav_tuple, on_peak=None,
         on_peak: callable(bool) — True = boca abierta, False = cerrada
         peak_interval_ms: intervalo de análisis (ms)
         peak_threshold: RMS mínimo para considerar "hablando"
+        on_before_play: callback invocado dentro del lock ANTES de sd.play()
+        on_after_play:  callback invocado dentro del lock DESPUÉS de reproducir
     """
     global _stop_flag, _current_stream, _playback_lock
 
     with _playback_lock:
+        # Notificar al caller que la reproducción está comenzando (dentro del lock)
+        if on_before_play:
+            try:
+                on_before_play()
+            except Exception:
+                pass
         _stop_flag = False
 
         if isinstance(wav_tuple, tuple):
@@ -189,3 +211,8 @@ def play_wav_with_peaks(wav_tuple, on_peak=None,
             stop_peak.set()
             _current_stream = None
             _stop_flag = False
+            if on_after_play:
+                try:
+                    on_after_play()
+                except Exception:
+                    pass

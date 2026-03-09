@@ -19,7 +19,12 @@ export NUMBA_CACHE_DIR=/tmp
 
 # Activar entorno virtual si existe
 if [ -d ".venv" ]; then
-    source .venv/bin/activate
+    # Windows usa Scripts/, Linux/Mac usa bin/
+    if [ -f ".venv/Scripts/activate" ]; then
+        source .venv/Scripts/activate
+    elif [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+    fi
 fi
 
 echo "================================================"

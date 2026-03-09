@@ -65,21 +65,16 @@ class AudioQueue:
             text, voice_profile, voice_name, main_window, author = self.queue.get()
             
             try:
-                # Enviar evento de inicio al overlay (modo normal = is_nopolo False)
                 # Si viene author, usarlo en lugar del nombre de voz
                 display_name = author if author else voice_name
                 print(f"[Audio Queue] Procesando modo normal con voz: {display_name}")
                 
-                # Usar overlay manager centralizado
-                overlay_mgr = get_overlay_manager()
                 # Obtener imágenes del avatar si el perfil tiene RVC configurado
                 _img_idle    = None
                 _img_talking = None
                 if voice_profile and voice_profile.rvc_config:
                     _img_idle    = voice_profile.rvc_config.image_idle
                     _img_talking = voice_profile.rvc_config.image_talking
-                overlay_mgr.show(text, display_name, is_nopolo=False,
-                                 image_idle=_img_idle, image_talking=_img_talking)
                 
                 # ── Protección GC ─────────────────────────────────────────────
                 # Desactivar GC durante las operaciones nativas (TTS/RVC).
@@ -128,6 +123,22 @@ class AudioQueue:
                 # ── Fin protección GC ──────────────────────────────────────────
 
                 # Paso 3: Reproducir (con detección de peaks para avatar)
+                # overlay.show() y overlay.hide() se pasan como callbacks para
+                # que ocurran DENTRO del _playback_lock → sin race conditions
+                # cuando AudioQueue y el worker multi-voz están activos a la vez.
+                _overlay = get_overlay_manager()
+                _text_snap    = text
+                _name_snap    = display_name
+                _idle_snap    = _img_idle
+                _talking_snap = _img_talking
+
+                def _on_before():
+                    _overlay.show(_text_snap, _name_snap, is_nopolo=False,
+                                  image_idle=_idle_snap, image_talking=_talking_snap)
+
+                def _on_after():
+                    _overlay.hide()
+
                 _has_avatar = bool(
                     voice_profile and voice_profile.rvc_config
                     and (voice_profile.rvc_config.image_idle
@@ -136,21 +147,20 @@ class AudioQueue:
                 if _has_avatar:
                     def _on_peak(talking: bool):
                         get_overlay_manager().avatar_peak(talking)
-                    play_wav_with_peaks(converted_wav, on_peak=_on_peak)
+                    play_wav_with_peaks(converted_wav, on_peak=_on_peak,
+                                        on_before_play=_on_before,
+                                        on_after_play=_on_after)
                 else:
-                    play_wav(converted_wav)
-                
-                # Limpiar overlay al terminar
-                overlay_mgr = get_overlay_manager()
-                overlay_mgr.hide()
+                    play_wav(converted_wav,
+                             on_before_play=_on_before,
+                             on_after_play=_on_after)
                 
             except Exception as e:
                 print(f"Error en cola de audio: {e}")
                 import traceback
                 traceback.print_exc()
                 try:
-                    overlay_mgr = get_overlay_manager()
-                    overlay_mgr.hide()
+                    get_overlay_manager().hide()
                 except Exception:
                     pass
                 # Re-activar GC si quedó desactivado por un crash

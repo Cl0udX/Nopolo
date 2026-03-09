@@ -181,7 +181,7 @@ class Config:
     def device_config(self) -> tuple:
         # PATCH: Deshabilitar MPS en Mac (tiene bugs con torch.stft y fairseq)
         # Usar CPU en su lugar
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and torch.cuda.device_count() > 0:
             self.use_cuda()
         # elif self.has_mps():  # DESHABILITADO - MPS tiene bugs
         #     logger.info("No supported Nvidia GPU found")

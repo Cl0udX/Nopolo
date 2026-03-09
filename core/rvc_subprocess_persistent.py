@@ -139,12 +139,36 @@ try:
 
         log(f"Procesando: {text[:60]}...")
         try:
-            audio_data, sample_rate = processor.process_message(text)
+            import json as _json_w
+            import tempfile as _tmp_w
+            audio_data, sample_rate, avatar_timeline = \
+                processor.process_message(text, return_timeline=True)
             sf_w.write(output_file, audio_data, sample_rate)
             del audio_data
             gc.collect()
-            log(f"OK → {output_file}")
-            proto(f"SUCCESS|{output_file}")
+
+            # Serializar timeline (VoiceProfile \u2192 dict con rutas de im\u00e1genes)
+            tl_list = []
+            for _entry in avatar_timeline:
+                _profile = _entry['profile']
+                tl_list.append({
+                    'start_sec':    _entry['start_sec'],
+                    'end_sec':      _entry['end_sec'],
+                    'is_sound':     _entry.get('is_sound', False),
+                    'peaks':        _entry['peaks'],
+                    'display_name': _profile.display_name if _profile else '',
+                    'image_idle':   (_profile.rvc_config.image_idle
+                                     if _profile and _profile.rvc_config else None),
+                    'image_talking': (_profile.rvc_config.image_talking
+                                      if _profile and _profile.rvc_config else None),
+                })
+            _fd2, tl_path = _tmp_w.mkstemp(suffix='.json')
+            os.close(_fd2)
+            with open(tl_path, 'w', encoding='utf-8') as _f:
+                _json_w.dump(tl_list, _f)
+
+            log(f"OK \u2192 {output_file} | timeline \u2192 {tl_path}")
+            proto(f"SUCCESS|{output_file}|{tl_path}")
         except Exception as proc_err:
             import traceback
             traceback.print_exc(file=sys.stderr)
@@ -520,15 +544,31 @@ class PersistentSubprocessProcessor:
                     payload = rest[0] if rest else ""
 
                     if kind == "SUCCESS":
-                        audio_data, sample_rate = sf.read(output_path, dtype="float32")
+                        # payload = "<audio_path>|<timeline_path>"
+                        _parts    = payload.split("|", 1)
+                        _aud_path = _parts[0]
+                        _tl_path  = _parts[1] if len(_parts) > 1 else None
+                        audio_data, sample_rate = sf.read(_aud_path, dtype="float32")
+                        avatar_timeline = []
+                        if _tl_path and os.path.exists(_tl_path):
+                            try:
+                                with open(_tl_path, 'r', encoding='utf-8') as _f:
+                                    avatar_timeline = json.load(_f)
+                            except Exception:
+                                pass
+                            finally:
+                                try:
+                                    os.unlink(_tl_path)
+                                except Exception:
+                                    pass
                         dur = len(audio_data) / sample_rate
                         self._req_count += 1
-                        # Reset crash counter en éxito
+                        # Reset crash counter en \u00e9xito
                         self._crash_count = 0
                         _tprint(f"[PersistentProcessor] Audio: {dur:.2f}s "
                               f"(req #{self._req_count}/{self.MAX_REQUESTS_PER_WORKER} "
                               f"en worker PID {self._process.pid})")
-                        return (audio_data, sample_rate)
+                        return (audio_data, sample_rate, avatar_timeline)
 
                     elif kind == "ERROR":
                         raise RuntimeError(f"Worker error: {payload}")

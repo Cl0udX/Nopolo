@@ -71,3 +71,5 @@ config/backgrounds.json
 config/sounds.json
 
 guia_nopolo.html
+
+config/emotes_cache.json

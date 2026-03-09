@@ -162,8 +162,9 @@ class TTSAPIServer:
         """Inicia el worker thread para procesar cola multi-voz secuencialmente"""
 
         def multivoice_worker():
-            from core.audio_player import play_wav
+            from core.audio_player import play_wav_with_peaks
             from core.rvc_subprocess_persistent import PersistentSubprocessProcessor
+            import time
 
             # PROCESADOR PERSISTENTE:
             # El subprocess hijo carga los modelos (Hubert, RMVPE, RVC) UNA SOLA VEZ
@@ -186,18 +187,74 @@ class TTSAPIServer:
 
                     # Todo el procesamiento (TTS + RVC + filtros) ocurre en el
                     # subprocess persistente → proceso principal nunca toca CUDA
-                    audio_data, sample_rate = processor.process_message(text)
+                    audio_data, sample_rate, avatar_timeline = \
+                        processor.process_message(text)
 
-                    # Mostrar overlay ANTES de reproducir (audio ya está listo)
                     display_name = author if author else "Multi-Voz (API)"
-                    overlay_mgr = get_overlay_manager()
-                    overlay_mgr.show(text, display_name, is_nopolo=True)
+                    overlay_mgr  = get_overlay_manager()
+                    _text_snap   = text
+                    _name_snap   = display_name
 
-                    # Reproducir (bloqueante hasta que termina)
-                    play_wav((audio_data, sample_rate))
+                    # play_start_ref se llena en _on_before() (dentro del lock)
+                    # para que el thread de avatares sepa cuándo empezó sd.play().
+                    play_start_ref = [None]
+                    play_started   = threading.Event()
+
+                    def _on_before():
+                        overlay_mgr.show(_text_snap, _name_snap, is_nopolo=True)
+                        play_start_ref[0] = time.time()
+                        play_started.set()
+
+                    def _on_after():
+                        overlay_mgr.hide()
+
+                    # Thread de avatares: igual que PlaybackMixin._mv_worker_loop
+                    def _drive_avatars(timeline, started_ev, t0_ref, mgr):
+                        started_ev.wait(timeout=10)
+                        t0 = t0_ref[0]
+                        if t0 is None:
+                            return
+                        for entry in timeline:
+                            start_sec   = entry['start_sec']
+                            peaks       = entry['peaks']
+                            is_sound    = entry.get('is_sound', False)
+                            disp        = entry.get('display_name', '')
+                            img_idle    = entry.get('image_idle')
+                            img_talking = entry.get('image_talking')
+
+                            wait = start_sec - (time.time() - t0)
+                            if wait > 0:
+                                time.sleep(wait)
+
+                            if is_sound:
+                                mgr.avatar_change('🔊', None, None,
+                                                  sound_indicator=True)
+                            else:
+                                mgr.avatar_change(disp, img_idle, img_talking)
+                                for offset_sec, is_talking in peaks:
+                                    target_t = t0 + start_sec + offset_sec
+                                    sleep_t  = target_t - time.time()
+                                    if sleep_t > 0.005:
+                                        time.sleep(sleep_t)
+                                    mgr.avatar_peak(is_talking)
+
+                        mgr.avatar_peak(False)
+
+                    if avatar_timeline:
+                        threading.Thread(
+                            target=_drive_avatars,
+                            args=(avatar_timeline, play_started,
+                                  play_start_ref, overlay_mgr),
+                            daemon=True,
+                        ).start()
+
+                    # overlay.show/hide ocurren dentro del _playback_lock
+                    play_wav_with_peaks((audio_data, sample_rate),
+                                       on_peak=None,
+                                       on_before_play=_on_before,
+                                       on_after_play=_on_after)
                     del audio_data
 
-                    overlay_mgr.hide()
                     print(f"[Worker Nopolo] Solicitud #{request_count} completada")
 
                 except Exception as e:
