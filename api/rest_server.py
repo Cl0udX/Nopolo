@@ -25,8 +25,7 @@ class TTSRequest(BaseModel):
     text: str = Field(..., description="Texto a sintetizar", min_length=1, max_length=5000)
     voice_id: Optional[str] = Field(None, description="ID del perfil de voz (usa default si no se especifica)")
     priority: Optional[int] = Field(0, description="Prioridad en la cola (mayor = más prioritario)")
-    author: Optional[str] = Field(None, description="Nombre del usuario que envió el mensaje (se muestra en overlay)")
-
+    author: Optional[str] = Field(None, description="Nombre del usuario que envió el mensaje (se muestra en overlay)")    max_segments: Optional[int] = Field(None, description="Límite de segmentos de voz a procesar (solo multivoice)")
     class Config:
         json_schema_extra = {
             "example": {
@@ -400,6 +399,16 @@ class TTSAPIServer:
                 if not clean_text:
                     return TTSResponse(success=True, message="Text was empty after filtering",
                                        queue_position=0, voice_used="multi-voice")
+
+                # Límite de seguridad para llamadas directas a la API.
+                # Twitch limita a 500 chars, pero alguien podría llamar la API directamente
+                # con textos enormes y bloquear el worker por minutos.
+                MAX_MULTIVOICE_CHARS = 1000
+                if len(clean_text) > MAX_MULTIVOICE_CHARS:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Multivoice text too long ({len(clean_text)} chars). Maximum is {MAX_MULTIVOICE_CHARS}."
+                    )
 
                 # Agregar a la cola dedicada de multi-voz (procesamiento secuencial)
                 self.multivoice_queue.put((clean_text, request.author))
