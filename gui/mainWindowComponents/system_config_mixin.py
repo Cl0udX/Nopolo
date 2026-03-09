@@ -240,8 +240,13 @@ class SystemConfigMixin:
         group_layout = QVBoxLayout()
 
         for conflict in conflicts:
+            reason_html = (
+                f"<br><span style='color:#f5c842; font-size:11px;'>💡 {conflict.reason}</span>"
+                if conflict.reason else ""
+            )
             item_label = QLabel(
-                f"  📄 <b>{conflict.filename}</b><br>"
+                f"  📄 <b>{conflict.filename}</b>"
+                f"{reason_html}<br>"
                 f"  <span style='color:#aaa; font-size:11px;'>"
                 f"Tu versión guardada: {conflict.old_path.name}"
                 f"</span>"

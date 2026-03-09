@@ -270,6 +270,51 @@ def _compute_bundle_overlay_hashes(src: Path) -> dict:
 # Estrategias de migración
 # ──────────────────────────────────────────────
 
+def _parse_overlay_changelog(src: Path) -> dict:
+    """
+    Parsea overlay/CHANGELOG.md y devuelve un dict {filename: descripcion}.
+
+    Formato esperado:
+        ## overlay.html
+        Línea 1 de descripción.
+        Línea 2 de descripción.
+
+        ## overlay.css
+        Otra descripción.
+    """
+    changelog_path = src / "CHANGELOG.md"
+    result: dict = {}
+    if not changelog_path.exists():
+        return result
+
+    try:
+        text = changelog_path.read_text(encoding="utf-8")
+        current_file = None
+        current_lines: list = []
+
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if line.startswith("## ") and not line.startswith("### "):
+                # Guardar sección anterior
+                if current_file and current_lines:
+                    result[current_file] = "\n".join(current_lines).strip()
+                current_file = line[3:].strip()
+                current_lines = []
+            elif current_file is not None:
+                # Ignorar separadores y líneas de comentario genérico
+                if line and not line.startswith("---") and not line.startswith("#"):
+                    current_lines.append(line)
+
+        # Guardar última sección
+        if current_file and current_lines:
+            result[current_file] = "\n".join(current_lines).strip()
+
+    except Exception as e:
+        logger.warning(f"[paths] overlay changelog: no se pudo parsear: {e}")
+
+    return result
+
+
 def _strategy_overlay_smart(
     src: Path,
     dst: Path,
@@ -289,6 +334,8 @@ def _strategy_overlay_smart(
     if not src.exists():
         logger.warning(f"[paths] overlay: fuente no encontrada: {src}")
         return []
+
+    changelog = _parse_overlay_changelog(src)
 
     dst.mkdir(parents=True, exist_ok=True)
     conflicts: List[OverlayConflict] = []
@@ -338,6 +385,7 @@ def _strategy_overlay_smart(
                 filename=rel_str,
                 old_path=old_path,
                 new_path=dst_item,
+                reason=changelog.get(rel_str, ""),
             ))
 
     return conflicts
