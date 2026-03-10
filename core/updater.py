@@ -280,9 +280,19 @@ def download_and_install(
             return False
 
         # ── 6. Actualizar archivos extras en raíz del bundle ──
-        _update_root_files(extract_dir, current_internal.parent, _progress)
+        bundle_root = current_internal.parent
+        _update_root_files(extract_dir, bundle_root, _progress)
+
+        # ── 7. Reemplazar el ejecutable principal ─────────────
+        _update_main_executable(extract_dir, bundle_root, _progress)
+
+        # ── 8. Renombrar carpeta del bundle a nueva versión ───
+        new_bundle_root = _rename_bundle_folder(bundle_root, update.remote_version, _progress)
 
         _progress(f"✅ Actualización a v{update.remote_version} completada.")
+
+        # Guardar la ruta del nuevo ejecutable para el reinicio
+        update._new_bundle_root = new_bundle_root or bundle_root
         return True
 
 
@@ -376,6 +386,78 @@ def _swap_internal(current: Path, new: Path, progress_fn) -> bool:
         return False
 
 
+def _update_main_executable(extract_dir: Path, bundle_root: Path, progress_fn):
+    """
+    Reemplaza el ejecutable principal (Nopolo / Nopolo.exe) con el del ZIP.
+    Necesario porque el binario tiene hardcodeada la ruta a _internal/.
+    Preserva los permisos de ejecución.
+    """
+    import stat
+
+    current_exe = Path(sys.executable)
+    exe_name    = current_exe.name   # "Nopolo" o "Nopolo.exe"
+
+    # Buscar el ejecutable en el ZIP extraído (nivel raíz del bundle)
+    new_exe = None
+    for candidate in extract_dir.rglob(exe_name):
+        # Debe estar en la raíz del bundle extraído, no dentro de _internal/
+        if "_internal" not in candidate.parts:
+            new_exe = candidate
+            break
+
+    if not new_exe or not new_exe.exists():
+        logger.warning(f"[updater] No se encontró ejecutable '{exe_name}' en el ZIP — se omite.")
+        return
+
+    try:
+        shutil.copy2(str(new_exe), str(current_exe))
+        # Restaurar permisos de ejecución
+        current_exe.chmod(current_exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        progress_fn(f"Ejecutable actualizado: {exe_name}")
+        logger.info(f"[updater] Ejecutable reemplazado: {current_exe}")
+    except Exception as e:
+        logger.warning(f"[updater] No se pudo reemplazar el ejecutable: {e}")
+
+
+def _rename_bundle_folder(bundle_root: Path, new_version: str, progress_fn) -> Optional[Path]:
+    """
+    Renombra la carpeta del bundle de Nopolo-X.X.X → Nopolo-Y.Y.Y.
+
+    Si ya existe Nopolo-Y.Y.Y/, en lugar de borrarla usa un sufijo
+    con timestamp para no perder nada: Nopolo-Y.Y.Y_20260309_191500
+    """
+    parent   = bundle_root.parent
+    old_name = bundle_root.name   # ej: "Nopolo-1.1.1"
+
+    # Extraer prefijo (todo antes del bloque de versión)
+    import re
+    match = re.match(r'^(.*?)[-_ ]?\d+\.\d+[\.\d]*$', old_name)
+    prefix = match.group(1).rstrip('-_ ') if match else old_name
+
+    new_name = f"{prefix}-{new_version}"
+    new_path = parent / new_name
+
+    # Si ya existe, añadir timestamp en lugar de borrar
+    if new_path.exists():
+        from datetime import datetime
+        stamp    = datetime.now().strftime("%Y%m%d_%H%M%S")
+        new_name = f"{prefix}-{new_version}_{stamp}"
+        new_path = parent / new_name
+        logger.warning(
+            f"[updater] '{prefix}-{new_version}' ya existe — "
+            f"usando nombre alternativo: {new_name}"
+        )
+
+    try:
+        bundle_root.rename(new_path)
+        progress_fn(f"Carpeta renombrada: {new_name}")
+        logger.info(f"[updater] Bundle renombrado: {old_name} → {new_name}")
+        return new_path
+    except Exception as e:
+        logger.warning(f"[updater] No se pudo renombrar carpeta del bundle: {e}")
+        return None
+
+
 def _update_root_files(extract_dir: Path, bundle_root: Path, progress_fn):
     """
     Copia archivos de la raíz del bundle (overlay/, config/, etc.)
@@ -408,13 +490,37 @@ def _update_root_files(extract_dir: Path, bundle_root: Path, progress_fn):
 # Reinicio post-actualización
 # ──────────────────────────────────────────────────────────────
 
-def restart_app():
-    """Reinicia la aplicación después de una actualización."""
+def restart_app(update: "UpdateInfo" = None):
+    """
+    Reinicia la aplicación después de una actualización.
+
+    Si update._new_bundle_root está definido (carpeta renombrada a nueva versión),
+    lanza el ejecutable desde ahí. Si no, usa el bundle root actual.
+    """
     logger.info("[updater] Reiniciando aplicación...")
     try:
-        exe = Path(sys.executable)
-        args = [str(exe)] + sys.argv[1:]
-        subprocess.Popen(args)
-        sys.exit(0)
+        current_exe = Path(sys.executable)
+        exe_name    = current_exe.name  # "Nopolo" o "Nopolo.exe"
+
+        # Usar la nueva carpeta renombrada si está disponible
+        if update is not None and hasattr(update, "_new_bundle_root"):
+            new_exe = update._new_bundle_root / exe_name
+        else:
+            new_exe = current_exe.parent / exe_name
+
+        # Fallback al ejecutable actual si el nuevo no existe
+        if not new_exe.exists():
+            logger.warning(f"[updater] Nuevo ejecutable no encontrado en {new_exe}, usando actual.")
+            new_exe = current_exe
+
+        logger.info(f"[updater] Lanzando: {new_exe}")
+
+        if sys.platform == "win32":
+            subprocess.Popen([str(new_exe)] + sys.argv[1:])
+            sys.exit(0)
+        else:
+            # os.execv reemplaza el proceso actual — limpio, sin fork
+            os.execv(str(new_exe), [str(new_exe)] + sys.argv[1:])
+
     except Exception as e:
         logger.error(f"[updater] No se pudo reiniciar: {e}")

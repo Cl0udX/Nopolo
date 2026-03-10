@@ -210,7 +210,7 @@ class UpdateProgressDialog(QDialog):
         self.accept()
         try:
             from core.updater import restart_app
-            restart_app()
+            restart_app(self.update_info)
         except Exception as e:
             logger.error(f"[update] Error al reiniciar: {e}")
 
