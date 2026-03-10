@@ -118,18 +118,23 @@ def is_newer(remote: str, local: str) -> bool:
 
 def get_local_version() -> str:
     """Devuelve la versión instalada actualmente."""
-    try:
-        from version import __version__
-        return __version__
-    except ImportError:
-        pass
+    # 1. Leer desde version.json en la raíz del bundle (tiene prioridad —
+    #    se actualiza en cada release sin recompilar)
     try:
         from core.paths import get_app_base_dir
         vpath = get_app_base_dir() / "version.json"
         if vpath.exists():
             with open(vpath, encoding="utf-8") as f:
-                return json.load(f).get("version", "0.0.0")
+                v = json.load(f).get("version", "")
+                if v:
+                    return v
     except Exception:
+        pass
+    # 2. Fallback: version compilada en el binario
+    try:
+        from version import __version__
+        return __version__
+    except ImportError:
         pass
     return "0.0.0"
 

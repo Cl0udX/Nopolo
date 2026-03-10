@@ -129,6 +129,14 @@ def find_dist(version: str, app_name: str) -> Path:
 
 def create_zip(dist_dir: Path, zip_path: Path) -> Path:
     """Crea un ZIP de dist_dir en zip_path. Devuelve el path del ZIP."""
+    # Copiar version.json a la raíz del bundle antes de zipear
+    # Así el updater puede leer la versión sin depender del binario compilado
+    version_src = ROOT / "version.json"
+    version_dst = dist_dir / "version.json"
+    if version_src.exists():
+        shutil.copy2(str(version_src), str(version_dst))
+        info(f"version.json copiado a bundle: {version_dst}")
+
     if zip_path.exists():
         zip_path.unlink()
         info(f"ZIP anterior eliminado: {zip_path.name}")
