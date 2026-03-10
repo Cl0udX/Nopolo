@@ -393,26 +393,20 @@ def _swap_internal(current: Path, new: Path, progress_fn) -> bool:
 
 def _rename_executable_in_bundle(bundle_root: Path, new_version: str, progress_fn):
     """
-    Renombra el ejecutable dentro del bundle recién instalado de
-    'Nopolo-1.1.1' → 'Nopolo-1.1.2' para que coincida con la carpeta.
+    Renombra el ejecutable principal (Nopolo-X.X.X) dentro del bundle
+    recién instalado a Nopolo-Y.Y.Y para que coincida con la nueva versión.
 
-    NO toca el ejecutable del bundle viejo (que sigue corriendo) — eso
-    causaría una invalidación de firma de código de macOS (SIGKILL).
+    Busca específicamente archivos que empiecen con 'Nopolo-' seguido de
+    un número de versión, para no confundirse con Generar_Guia_Nopolo u otros.
     """
     import re, stat
 
-    # Buscar el ejecutable en la raíz del bundle (no dentro de _internal/)
     for candidate in bundle_root.iterdir():
-        if candidate.is_file() and not candidate.name.startswith('.'):
-            # Verificar que tiene bit de ejecución o nombre coincide con patrón
-            if (candidate.stat().st_mode & stat.S_IXUSR) or re.match(r'^Nopolo', candidate.name, re.IGNORECASE):
-                # Calcular nuevo nombre
-                match = re.match(r'^(.*?)[-_]?\d+\.\d+[\.\d]*$', candidate.name)
-                if match:
-                    prefix   = match.group(1).rstrip('-_')
-                    new_name = f"{prefix}-{new_version}"
-                else:
-                    new_name = candidate.name  # sin versión en el nombre, dejarlo
+        # Solo archivos que sean exactamente "Nopolo-X.X.X" (con versión)
+        if candidate.is_file() and re.match(r'^Nopolo-\d+\.\d+', candidate.name):
+            match = re.match(r'^(Nopolo)-\d+\.\d+[\.\d]*$', candidate.name)
+            if match:
+                new_name = f"Nopolo-{new_version}"
                 new_path = bundle_root / new_name
                 if new_path != candidate:
                     try:
@@ -519,21 +513,17 @@ def restart_app(update: "UpdateInfo" = None):
         new_version = getattr(update, "_new_version", None) if update else None
 
         if new_version:
-            # Buscar ejecutable con la nueva versión en el nombre
-            import re as _re
-            for candidate in new_bundle_root.iterdir():
-                if candidate.is_file() and new_version in candidate.name:
-                    new_exe = candidate
-                    break
+            # Buscar exactamente "Nopolo-1.1.2" (con versión en el nombre)
+            candidate = new_bundle_root / f"Nopolo-{new_version}"
+            if candidate.exists():
+                new_exe = candidate
 
         if not new_exe:
-            # Fallback: buscar cualquier ejecutable en la raíz (no _internal)
+            # Fallback: buscar cualquier archivo Nopolo-X.X.X en la raíz
             for candidate in new_bundle_root.iterdir():
-                if candidate.is_file() and not candidate.name.startswith('.'):
-                    if (candidate.stat().st_mode & _stat.S_IXUSR) or \
-                       re.match(r'^Nopolo', candidate.name, re.IGNORECASE):
-                        new_exe = candidate
-                        break
+                if candidate.is_file() and re.match(r'^Nopolo-\d+\.\d+', candidate.name):
+                    new_exe = candidate
+                    break
 
         if not new_exe or not new_exe.exists():
             logger.warning(f"[updater] Ejecutable no encontrado en {new_bundle_root}, usando actual.")
