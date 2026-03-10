@@ -121,8 +121,8 @@ def get_local_version() -> str:
     # 1. Leer desde version.json en la raíz del bundle (tiene prioridad —
     #    se actualiza en cada release sin recompilar)
     try:
-        from core.paths import get_app_base_dir
-        vpath = get_app_base_dir() / "version.json"
+        from core.paths import get_bundle_data_dir
+        vpath = get_bundle_data_dir() / "version.json"
         if vpath.exists():
             with open(vpath, encoding="utf-8") as f:
                 v = json.load(f).get("version", "")
