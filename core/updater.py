@@ -149,8 +149,13 @@ def check_for_updates(custom_url: str = None) -> UpdateInfo:
     url = custom_url or VERSION_JSON_URL
     logger.debug(f"[updater] Consultando: {url}")
 
+    # Cloudflare bloquea el User-Agent por defecto de Python
+    req = __import__("urllib.request", fromlist=["Request"]).Request(
+        url, headers={"User-Agent": "Mozilla/5.0 (compatible; Nopolo-Updater/1.0)"}
+    )
+
     try:
-        with urlopen(url, timeout=HTTP_TIMEOUT) as resp:
+        with urlopen(req, timeout=HTTP_TIMEOUT) as resp:
             remote = json.loads(resp.read().decode("utf-8"))
     except URLError as e:
         info.error = f"Sin conexión o URL inaccesible: {e}"
@@ -285,19 +290,35 @@ def _download_with_progress(url: str, dest: Path, progress_fn):
     """Descarga con reporte de progreso."""
     import urllib.request
 
-    def reporthook(block_num, block_size, total_size):
-        downloaded = block_num * block_size
-        if total_size > 0:
-            pct = min(int(downloaded / total_size * 100), 100)
-            mb  = downloaded / (1024 * 1024)
-            total_mb = total_size / (1024 * 1024)
-            progress_fn(
-                f"Descargando... {pct}% ({mb:.1f}/{total_mb:.1f} MB)",
-                downloaded,
-                total_size,
-            )
+    # Cloudflare bloquea el User-Agent por defecto de Python
+    USER_AGENT = "Mozilla/5.0 (compatible; Nopolo-Updater/1.0)"
 
-    urllib.request.urlretrieve(url, dest, reporthook)
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+
+    with urllib.request.urlopen(req) as resp:
+        total_size = int(resp.headers.get("Content-Length", 0))
+        downloaded = 0
+        chunk_size  = 1024 * 256  # 256 KB
+
+        with open(dest, "wb") as f:
+            while True:
+                chunk = resp.read(chunk_size)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total_size > 0:
+                    pct = min(int(downloaded / total_size * 100), 100)
+                    mb  = downloaded / (1024 * 1024)
+                    total_mb = total_size / (1024 * 1024)
+                    progress_fn(
+                        f"Descargando... {pct}% ({mb:.1f}/{total_mb:.1f} MB)",
+                        downloaded,
+                        total_size,
+                    )
+                else:
+                    mb = downloaded / (1024 * 1024)
+                    progress_fn(f"Descargando... {mb:.1f} MB", downloaded, 0)
 
 
 def _find_internal(extract_dir: Path) -> Optional[Path]:
