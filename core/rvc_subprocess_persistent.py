@@ -62,33 +62,117 @@ def _find_python_executable() -> str:
 
     # 2. Buscar junto al bundle: el venv que lo compiló suele estar en
     #    <dist_folder>/../../../  (relativo a _MEIPASS que es <dist>/Nopolo-x/_internal)
+    #
+    #    En Windows los venvs usan Scripts\ en lugar de bin/.
+    #    Intentamos preferir la versión que coincide con el DLL bundleado.
     try:
-        import sys as _sys
+        import sys as _sys, platform as _platform
         meipass = getattr(_sys, "_MEIPASS", None)
         if meipass:
+            bundled_ver = _detect_bundled_python_version(meipass)
             # _internal → Nopolo-x → dist → workspace
             for levels_up in (3, 4, 5):
                 candidate_dir = os.path.normpath(
                     os.path.join(meipass, *[".."] * levels_up)
                 )
-                for py_name in ("python3", "python"):
-                    for subdir in (".venv/bin", "venv/bin", "bin", ""):
+                if _platform.system() == "Windows":
+                    search_subdirs = (".venv/Scripts", "venv/Scripts", "Scripts",
+                                      ".venv/bin", "venv/bin", "bin", "")
+                    search_names   = ("python.exe", "python3.exe", "python")
+                else:
+                    search_subdirs = (".venv/bin", "venv/bin", "bin", "")
+                    search_names   = ("python3", "python")
+                for subdir in search_subdirs:
+                    for py_name in search_names:
                         py_path = os.path.join(candidate_dir, subdir, py_name)
                         if os.path.isfile(py_path):
+                            if bundled_ver and not _python_version_matches(py_path, bundled_ver):
+                                continue  # versión incompatible, seguir buscando
                             return py_path
     except Exception:
         pass
 
-    # 3. Buscar en PATH del sistema
-    import shutil
-    for py_name in ("python3", "python"):
+    # 3. Buscar en PATH del sistema — skip Windows Store stubs y versiones incompatibles
+    import shutil, platform as _plat
+    bundled_ver = None
+    try:
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            bundled_ver = _detect_bundled_python_version(meipass)
+    except Exception:
+        pass
+
+    candidates = (["python3", "python"] if _plat.system() != "Windows"
+                  else ["python.exe", "python3.exe", "python"])
+
+    for py_name in candidates:
         found = shutil.which(py_name)
-        if found:
+        if not found:
+            continue
+        if _is_windows_store_python(found):     # stubs incompatibles
+            continue
+        if bundled_ver and not _python_version_matches(found, bundled_ver):
+            continue
+        return found
+
+    # 3b. Segundo intento sin filtro de versión (si no hay match exacto; ej. no
+    #     hay Python 3.10 instalado aparte)
+    for py_name in candidates:
+        found = shutil.which(py_name)
+        if found and not _is_windows_store_python(found):
             return found
 
     # Fallback: devolver sys.executable aunque no funcione para '-c'
     # (al menos el error será claro)
     return sys.executable
+
+
+def _is_windows_store_python(path: str) -> bool:
+    """True si la ruta es un stub del Windows Store (incompatible como intérprete)."""
+    p = path.replace("\\", "/").lower()
+    return "windowsapps" in p or "microsoft/windowsapps" in p
+
+
+def _detect_bundled_python_version(meipass: str) -> str:
+    """
+    Lee el nombre de python*.dll / libpython*.dylib en _MEIPASS y devuelve
+    la versión corta: "310" (Windows) o "3.10" (macOS/Linux).
+    Devuelve cadena vacía si no se puede detectar.
+    """
+    import glob, re
+    patterns = [
+        os.path.join(meipass, "python3*.dll"),       # Windows: python310.dll
+        os.path.join(meipass, "libpython3*.so*"),    # Linux
+        os.path.join(meipass, "libpython3*.dylib"),  # macOS
+    ]
+    for pat in patterns:
+        for dll in glob.glob(pat):
+            m = re.search(r'python(3\d+)', os.path.basename(dll), re.IGNORECASE)
+            if m:
+                return m.group(1)       # "310"
+            m = re.search(r'python(3\.\d+)', os.path.basename(dll))
+            if m:
+                return m.group(1)       # "3.10"
+    return ""
+
+
+def _python_version_matches(py_path: str, bundled_ver: str) -> bool:
+    """
+    Comprueba si el ejecutable py_path es de la misma versión que bundled_ver.
+    bundled_ver puede ser "310" o "3.10" — ambos significan Python 3.10.
+    """
+    import re, subprocess as _sp
+    m = re.match(r'^3(\d+)$', bundled_ver)   # "310" → "3.10"
+    bundled_norm = f"3.{m.group(1)}" if m else bundled_ver
+    try:
+        out = _sp.check_output(
+            [py_path, "-c",
+             "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+            timeout=5, stderr=_sp.DEVNULL,
+        ).decode().strip()
+        return out == bundled_norm
+    except Exception:
+        return False
 
 # Capturar los streams REALES antes de que la GUI los redirija a widgets Qt.
 # Los relay threads DEBEN usar estos — llamar a sys.stdout desde un thread
