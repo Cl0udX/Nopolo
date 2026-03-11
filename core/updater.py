@@ -515,6 +515,9 @@ def _launch_windows_update_script(
         'powershell -NoProfile -NonInteractive -Command "try { (Get-Process -Id %PPID% -ErrorAction Stop).WaitForExit(90000) } catch {}" 2>NUL',
         "timeout /t 2 /nobreak >NUL",
         "",
+        ":: Cambiar a directorio padre para liberar cualquier CWD dentro del bundle",
+        'cd /d "%PARENT_DIR%"',
+        "",
         ":: Swap _internal con rutas completas (sin pushd para no retener handle de carpeta)",
         'set "BUNDLE_DIR=%PARENT_DIR%\\%OLD_BUNDLE%"',
         "",
@@ -544,7 +547,7 @@ def _launch_windows_update_script(
         'ren "%BUNDLE_DIR%\\_internal_backup" "_internal"',
         "",
         ":cleanup",
-        '(goto) 2>NUL & del "%~f0"',
+        'del "%~f0" 2>NUL',
     ]
 
     bat_content = "\r\n".join(bat_lines) + "\r\n"
@@ -563,6 +566,10 @@ def _launch_windows_update_script(
             ["cmd.exe", "/C", str(bat_path)],
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
             close_fds=True,
+            # Iniciar con CWD en el directorio PADRE del bundle, no dentro de él.
+            # Esto es crítico: Windows no permite renombrar una carpeta si algún
+            # proceso tiene su CWD dentro de ella — incluso aunque sea cmd.exe.
+            cwd=str(bundle_root.parent),
         )
         progress_fn("Script de actualización instalado en segundo plano.")
         logger.info(f"[updater] Update bat launched: {bat_path}")
