@@ -303,15 +303,26 @@ def download_and_install(
             # (overlay/, config/, sounds/, version.json)
             _update_root_files(extract_dir, bundle_root, _progress)
 
-            # Renombrar bundle folder y exe (seguros: no son PYDs memory-mapped)
-            new_bundle_root = _rename_bundle_folder(bundle_root, update.remote_version, _progress)
-            actual_root = new_bundle_root or bundle_root
-            if new_bundle_root:
-                _rename_executable_in_bundle(new_bundle_root, update.remote_version, _progress)
+            # Buscar nombre del ejecutable actual (para que el bat lo renombre)
+            import re as _re
+            old_exe_name: Optional[str] = None
+            try:
+                for _c in bundle_root.iterdir():
+                    if _c.is_file() and _re.match(r'^Nopolo-\d+\.\d+', _c.name):
+                        old_exe_name = _c.name
+                        break
+            except Exception:
+                pass
 
-            # Escribir y lanzar bat script diferido
+            # Escribir y lanzar bat script diferido.
+            # El bat hará: swap _internal + renombrar carpeta + renombrar exe.
+            # TODO: NO llamamos _rename_bundle_folder / _rename_executable_in_bundle
+            # aquí porque Windows no permite renombrar la carpeta mientras el .exe
+            # que vive dentro sigue corriendo.
             ok = _launch_windows_update_script(
-                bundle_root=actual_root,
+                bundle_root=bundle_root,
+                new_version=update.remote_version,
+                old_exe_name=old_exe_name,
                 pid=os.getpid(),
                 progress_fn=_progress,
             )
@@ -319,7 +330,7 @@ def download_and_install(
                 return False
 
             _progress(f"✅ Actualización a v{update.remote_version} lista. Cerrando aplicación...")
-            update._new_bundle_root = actual_root
+            update._new_bundle_root = bundle_root
             update._new_version     = update.remote_version
             update._deferred_win32  = True
             return True
@@ -442,44 +453,70 @@ def _swap_internal(current: Path, new: Path, progress_fn) -> bool:
 
 def _launch_windows_update_script(
     bundle_root: Path,
+    new_version: str,
+    old_exe_name: Optional[str],
     pid: int,
     progress_fn,
 ) -> bool:
     """
-    Windows-only. Escribe en %TEMP% un .bat que:
+    Windows-only. Escribe en %TEMP% un .bat que, después de que el proceso
+    Nopolo termine (handles liberados):
       1. Espera (via PowerShell WaitForExit) que el proceso 'pid' termine.
       2. Renombra  _internal       → _internal_backup  (ya sin kernel-locks).
       3. Renombra  _internal_new   → _internal.
       4. Elimina   _internal_backup.
-      5. Lanza el nuevo ejecutable.
-      6. Se auto-elimina.
+      5. Renombra la carpeta del bundle  Nopolo-X.X.X → Nopolo-Y.Y.Y.
+      6. Renombra el ejecutable          Nopolo-X.X.X → Nopolo-Y.Y.Y  (mantiene ext).
+      7. Lanza el nuevo ejecutable.
+      8. Se auto-elimina.
     """
     import re
+    from datetime import datetime
 
-    # Buscar el nuevo ejecutable en el bundle (ya renombrado si tuvo éxito)
-    new_exe_str = ""
-    try:
-        for candidate in bundle_root.iterdir():
-            if candidate.is_file() and re.match(r'^Nopolo-\d+\.\d+', candidate.name):
-                new_exe_str = str(candidate)
-                break
-    except Exception:
-        pass
+    parent     = bundle_root.parent
+    parent_dir = str(parent)
+    old_bundle = bundle_root.name   # ej: "Nopolo-1.1.1"
 
-    bundle_str = str(bundle_root)
+    # Calcular nombre nuevo del bundle folder (misma lógica que _rename_bundle_folder en macOS)
+    match  = re.match(r'^(.*?)[-_ ]?\d+\.\d+[\.\d]*$', old_bundle)
+    prefix = match.group(1).rstrip('-_ ') if match else old_bundle
+    new_bundle = f"{prefix}-{new_version}"    # ej: "Nopolo-1.1.2"
+
+    # Si la carpeta destino ya existe, añadir timestamp — igual que macOS
+    if (parent / new_bundle).exists():
+        stamp      = datetime.now().strftime("%Y%m%d_%H%M%S")
+        new_bundle = f"{prefix}-{new_version}_{stamp}"
+        logger.warning(
+            f"[updater] '{prefix}-{new_version}' ya existe — "
+            f"usando nombre alternativo: {new_bundle}"
+        )
+
+    # Calcular nombres viejo/nuevo del ejecutable (conservando extensión si existe)
+    if old_exe_name:
+        exe_match    = re.match(r'^Nopolo-\d+\.\d+[\.\d]*(\..*)?$', old_exe_name)
+        ext          = (exe_match.group(1) or "") if exe_match else ""
+        new_exe_name = f"Nopolo-{new_version}{ext}"
+    else:
+        old_exe_name = f"Nopolo-{new_version}"
+        new_exe_name = old_exe_name
+        ext          = ""
+
     bat_lines = [
         "@echo off",
         "setlocal",
         f'set "PPID={pid}"',
-        f'set "BUNDLE_DIR={bundle_str}"',
-        f'set "NEW_EXE={new_exe_str}"',
+        f'set "PARENT_DIR={parent_dir}"',
+        f'set "OLD_BUNDLE={old_bundle}"',
+        f'set "NEW_BUNDLE={new_bundle}"',
+        f'set "OLD_EXE={old_exe_name}"',
+        f'set "NEW_EXE_NAME={new_exe_name}"',
         "",
         ":: Esperar que el proceso Nopolo termine (max 90 segundos)",
         'powershell -NoProfile -NonInteractive -Command "try { (Get-Process -Id %PPID% -ErrorAction Stop).WaitForExit(90000) } catch {}" 2>NUL',
         "timeout /t 2 /nobreak >NUL",
         "",
         ":: Swap _internal (ahora libre de kernel-locks)",
-        'pushd "%BUNDLE_DIR%"',
+        'pushd "%PARENT_DIR%\\%OLD_BUNDLE%"',
         "if errorlevel 1 goto :cleanup",
         "",
         'if exist "_internal_backup" rmdir /S /Q "_internal_backup"',
@@ -492,10 +529,17 @@ def _launch_windows_update_script(
         'if exist "_internal_backup" rmdir /S /Q "_internal_backup"',
         "popd",
         "",
-        ":: Lanzar nueva version",
-        'if "%NEW_EXE%"=="" goto :cleanup',
-        'if not exist "%NEW_EXE%" goto :cleanup',
-        'start "" "%NEW_EXE%"',
+        ":: Renombrar carpeta del bundle Nopolo-X.X.X → Nopolo-Y.Y.Y",
+        'if /I "%OLD_BUNDLE%"=="%NEW_BUNDLE%" goto :rename_exe',
+        'ren "%PARENT_DIR%\\%OLD_BUNDLE%" "%NEW_BUNDLE%"',
+        "",
+        ":rename_exe",
+        ":: Renombrar ejecutable dentro del nuevo bundle",
+        'if /I "%OLD_EXE%"=="%NEW_EXE_NAME%" goto :launch',
+        'if exist "%PARENT_DIR%\\%NEW_BUNDLE%\\%OLD_EXE%" ren "%PARENT_DIR%\\%NEW_BUNDLE%\\%OLD_EXE%" "%NEW_EXE_NAME%"',
+        "",
+        ":launch",
+        'start "" "%PARENT_DIR%\\%NEW_BUNDLE%\\%NEW_EXE_NAME%"',
         "goto :cleanup",
         "",
         ":swap_fail",
