@@ -64,10 +64,14 @@ def _find_python_executable() -> str:
     meipass = getattr(sys, "_MEIPASS", None)
     bundled_ver = _detect_bundled_python_version(meipass) if meipass else ""
 
-    # 2. Buscar python.exe DENTRO de _internal/ (incluido explícitamente en el build)
+    # 2. Buscar python ejecutable DENTRO de _internal/ (incluido explícitamente en el build)
     #    Es la opción más segura: misma versión garantizada, no depende del sistema.
-    if meipass and _platform.system() == "Windows":
-        for py_name in ("python.exe", "python3.exe"):
+    if meipass:
+        if _platform.system() == "Windows":
+            py_names = ("python.exe", "python3.exe")
+        else:
+            py_names = ("python3", "python")
+        for py_name in py_names:
             candidate = os.path.join(meipass, py_name)
             if os.path.isfile(candidate):
                 return candidate

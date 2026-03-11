@@ -161,6 +161,9 @@ except Exception as e:
 # subprocess use exactamente la misma versión que compiló el bundle.
 # Sin esto, si el usuario tiene Python 3.12 en el PATH se produce:
 #   ImportError: Module use of python310.dll conflicts with this version of Python
+#
+# En macOS: incluir python3 también — macOS moderno (Ventura+) NO viene con
+# Python3 instalado por defecto. Sin esto el worker falla en Macs limpias.
 import platform as _build_platform, shutil as _build_shutil
 if _build_platform.system() == "Windows":
     _py_exe = _build_shutil.which("python.exe") or sys.executable
@@ -169,6 +172,13 @@ if _build_platform.system() == "Windows":
         print(f"\n✅ python.exe incluido en bundle: {_py_exe}")
     else:
         print("\n⚠ WARNING: No se encontró python.exe para incluir en el bundle.")
+elif _build_platform.system() == "Darwin":
+    _py_exe = _build_shutil.which("python3") or _build_shutil.which("python")
+    if _py_exe and os.path.isfile(_py_exe):
+        binaries.append((_py_exe, "."))
+        print(f"\n✅ python3 incluido en bundle: {_py_exe}")
+    else:
+        print("\n⚠ WARNING: No se encontró python3 para incluir en el bundle.")
 
 a = Analysis(
     ['main.py'],
