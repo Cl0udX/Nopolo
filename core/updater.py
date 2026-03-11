@@ -278,14 +278,58 @@ def download_and_install(
             _progress("No se encontró _internal/ del bundle actual.")
             return False
 
+        bundle_root = current_internal.parent
         _progress("Instalando actualización...")
-        success = _swap_internal(current_internal, new_internal, _progress)
 
+        if sys.platform == "win32":
+            # ── Windows: los .pyd cargados en memoria están kernel-locked   ──
+            # ── mientras el proceso vive → no se pueden renombrar/mover.    ──
+            # ── Solución: staging + bat script diferido que hace el swap     ──
+            # ── DESPUÉS de que este proceso salga y libere los locks.       ──
+
+            # Mover nuevo _internal a staging permanente (fuera del tmpdir)
+            staged = bundle_root / "_internal_new"
+            try:
+                if staged.exists():
+                    shutil.rmtree(staged)
+                _progress("Preparando archivos de actualización...")
+                shutil.move(str(new_internal), str(staged))
+            except Exception as e:
+                _progress(f"Error preparando staging: {e}")
+                logger.error(f"[updater] Staging failed: {e}")
+                return False
+
+            # Actualizar archivos raíz que no están bloqueados
+            # (overlay/, config/, sounds/, version.json)
+            _update_root_files(extract_dir, bundle_root, _progress)
+
+            # Renombrar bundle folder y exe (seguros: no son PYDs memory-mapped)
+            new_bundle_root = _rename_bundle_folder(bundle_root, update.remote_version, _progress)
+            actual_root = new_bundle_root or bundle_root
+            if new_bundle_root:
+                _rename_executable_in_bundle(new_bundle_root, update.remote_version, _progress)
+
+            # Escribir y lanzar bat script diferido
+            ok = _launch_windows_update_script(
+                bundle_root=actual_root,
+                pid=os.getpid(),
+                progress_fn=_progress,
+            )
+            if not ok:
+                return False
+
+            _progress(f"✅ Actualización a v{update.remote_version} lista. Cerrando aplicación...")
+            update._new_bundle_root = actual_root
+            update._new_version     = update.remote_version
+            update._deferred_win32  = True
+            return True
+
+        # ── macOS / Linux: swap directo (no hay kernel-locks en _internal) ──
+        success = _swap_internal(current_internal, new_internal, _progress)
         if not success:
             return False
 
         # ── 6. Actualizar archivos extras en raíz del bundle ──
-        bundle_root = current_internal.parent
         _update_root_files(extract_dir, bundle_root, _progress)
 
         # ── 7. Renombrar carpeta del bundle a nueva versión ───
@@ -396,6 +440,100 @@ def _swap_internal(current: Path, new: Path, progress_fn) -> bool:
         return False
 
 
+def _launch_windows_update_script(
+    bundle_root: Path,
+    pid: int,
+    progress_fn,
+) -> bool:
+    """
+    Windows-only. Escribe en %TEMP% un .bat que:
+      1. Espera (via PowerShell WaitForExit) que el proceso 'pid' termine.
+      2. Renombra  _internal       → _internal_backup  (ya sin kernel-locks).
+      3. Renombra  _internal_new   → _internal.
+      4. Elimina   _internal_backup.
+      5. Lanza el nuevo ejecutable.
+      6. Se auto-elimina.
+    """
+    import re
+
+    # Buscar el nuevo ejecutable en el bundle (ya renombrado si tuvo éxito)
+    new_exe_str = ""
+    try:
+        for candidate in bundle_root.iterdir():
+            if candidate.is_file() and re.match(r'^Nopolo-\d+\.\d+', candidate.name):
+                new_exe_str = str(candidate)
+                break
+    except Exception:
+        pass
+
+    bundle_str = str(bundle_root)
+    bat_lines = [
+        "@echo off",
+        "setlocal",
+        f'set "PPID={pid}"',
+        f'set "BUNDLE_DIR={bundle_str}"',
+        f'set "NEW_EXE={new_exe_str}"',
+        "",
+        ":: Esperar que el proceso Nopolo termine (max 90 segundos)",
+        'powershell -NoProfile -NonInteractive -Command "try { (Get-Process -Id %PPID% -ErrorAction Stop).WaitForExit(90000) } catch {}" 2>NUL',
+        "timeout /t 2 /nobreak >NUL",
+        "",
+        ":: Swap _internal (ahora libre de kernel-locks)",
+        'pushd "%BUNDLE_DIR%"',
+        "if errorlevel 1 goto :cleanup",
+        "",
+        'if exist "_internal_backup" rmdir /S /Q "_internal_backup"',
+        'ren "_internal" "_internal_backup"',
+        "if errorlevel 1 goto :popd_cleanup",
+        "",
+        'ren "_internal_new" "_internal"',
+        "if errorlevel 1 goto :swap_fail",
+        "",
+        'if exist "_internal_backup" rmdir /S /Q "_internal_backup"',
+        "popd",
+        "",
+        ":: Lanzar nueva version",
+        'if "%NEW_EXE%"=="" goto :cleanup',
+        'if not exist "%NEW_EXE%" goto :cleanup',
+        'start "" "%NEW_EXE%"',
+        "goto :cleanup",
+        "",
+        ":swap_fail",
+        'ren "_internal_backup" "_internal"',
+        "",
+        ":popd_cleanup",
+        "popd",
+        "",
+        ":cleanup",
+        '(goto) 2>NUL & del "%~f0"',
+    ]
+
+    bat_content = "\r\n".join(bat_lines) + "\r\n"
+
+    bat_path = Path(tempfile.gettempdir()) / "nopolo_update.bat"
+    try:
+        with open(bat_path, "w", encoding="utf-8", newline="") as f:
+            f.write(bat_content)
+    except Exception as e:
+        progress_fn(f"Error escribiendo script de actualización: {e}")
+        logger.error(f"[updater] Error writing update bat: {e}")
+        return False
+
+    try:
+        subprocess.Popen(
+            ["cmd.exe", "/C", str(bat_path)],
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+            close_fds=True,
+        )
+        progress_fn("Script de actualización instalado en segundo plano.")
+        logger.info(f"[updater] Update bat launched: {bat_path}")
+        return True
+    except Exception as e:
+        progress_fn(f"Error lanzando script de actualización: {e}")
+        logger.error(f"[updater] Error launching update bat: {e}")
+        return False
+
+
 def _rename_executable_in_bundle(bundle_root: Path, new_version: str, progress_fn):
     """
     Renombra el ejecutable principal (Nopolo-X.X.X) dentro del bundle
@@ -502,6 +640,13 @@ def restart_app(update: "UpdateInfo" = None):
     El nombre del ejecutable puede haber cambiado (ej. Nopolo-1.1.1 → Nopolo-1.1.2).
     """
     logger.info("[updater] Reiniciando aplicación...")
+
+    # Windows deferred: el bat script esperará a que este proceso muera y luego
+    # hará el swap de _internal + lanzará la nueva versión automáticamente.
+    if update is not None and getattr(update, "_deferred_win32", False):
+        logger.info("[updater] Windows deferred — cerrando para que el bat haga el swap.")
+        sys.exit(0)
+
     try:
         current_exe = Path(sys.executable)
 
