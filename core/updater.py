@@ -540,7 +540,7 @@ def _launch_windows_update_script(
         'if exist "%PARENT_DIR%\\%NEW_BUNDLE%\\%OLD_EXE%" ren "%PARENT_DIR%\\%NEW_BUNDLE%\\%OLD_EXE%" "%NEW_EXE_NAME%"',
         "",
         ":launch",
-        'start "" "%PARENT_DIR%\\%NEW_BUNDLE%\\%NEW_EXE_NAME%"',
+        'start "" /D "%PARENT_DIR%\\%NEW_BUNDLE%" "%PARENT_DIR%\\%NEW_BUNDLE%\\%NEW_EXE_NAME%"',
         "goto :cleanup",
         "",
         ":swap_fail",

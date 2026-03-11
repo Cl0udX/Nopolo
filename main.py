@@ -20,12 +20,16 @@ import traceback
 # Activar faulthandler para ver dónde crashea
 faulthandler.enable()
 
+# Ruta absoluta del log: junto al ejecutable en build, junto a main.py en dev
+_log_base = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) \
+            else os.path.dirname(os.path.abspath(__file__))
+
 # Logging detallado
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('nopolo_debug.log', encoding='utf-8', mode='w'),
+        logging.FileHandler(os.path.join(_log_base, 'nopolo_debug.log'), encoding='utf-8', mode='w'),
         logging.StreamHandler(sys.stdout)
     ]
 )
