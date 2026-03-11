@@ -153,7 +153,7 @@ binaries = []
 try:
     from PyInstaller.utils.hooks import collect_dynamic_libs
     binaries += collect_dynamic_libs('torch')
-    print("\n✅ DLLs de Torch recolectadas con éxito.")
+    print("\nDLLs de Torch recolectadas con éxito.")
 except Exception as e:
     print(f"\n⚠ WARNING: No se pudieron recolectar librerías dinámicas de Torch: {e}")
 
@@ -169,14 +169,14 @@ if _build_platform.system() == "Windows":
     _py_exe = _build_shutil.which("python.exe") or sys.executable
     if _py_exe and os.path.isfile(_py_exe):
         binaries.append((_py_exe, "."))
-        print(f"\n✅ python.exe incluido en bundle: {_py_exe}")
+        print(f"\npython.exe incluido en bundle: {_py_exe}")
     else:
         print("\n⚠ WARNING: No se encontró python.exe para incluir en el bundle.")
 elif _build_platform.system() == "Darwin":
     _py_exe = _build_shutil.which("python3") or _build_shutil.which("python")
     if _py_exe and os.path.isfile(_py_exe):
         binaries.append((_py_exe, "."))
-        print(f"\n✅ python3 incluido en bundle: {_py_exe}")
+        print(f"\npython3 incluido en bundle: {_py_exe}")
     else:
         print("\n⚠ WARNING: No se encontró python3 para incluir en el bundle.")
 
