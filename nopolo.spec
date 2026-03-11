@@ -157,6 +157,19 @@ try:
 except Exception as e:
     print(f"\n⚠ WARNING: No se pudieron recolectar librerías dinámicas de Torch: {e}")
 
+# En Windows: incluir python.exe dentro de _internal/ para que el worker
+# subprocess use exactamente la misma versión que compiló el bundle.
+# Sin esto, si el usuario tiene Python 3.12 en el PATH se produce:
+#   ImportError: Module use of python310.dll conflicts with this version of Python
+import platform as _build_platform, shutil as _build_shutil
+if _build_platform.system() == "Windows":
+    _py_exe = _build_shutil.which("python.exe") or sys.executable
+    if _py_exe and os.path.isfile(_py_exe):
+        binaries.append((_py_exe, "."))
+        print(f"\n✅ python.exe incluido en bundle: {_py_exe}")
+    else:
+        print("\n⚠ WARNING: No se encontró python.exe para incluir en el bundle.")
+
 a = Analysis(
     ['main.py'],
     pathex=[],

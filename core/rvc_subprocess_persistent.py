@@ -60,16 +60,26 @@ def _find_python_executable() -> str:
     if override and os.path.isfile(override):
         return override
 
-    # 2. Buscar junto al bundle: el venv que lo compiló suele estar en
+    import platform as _platform
+    meipass = getattr(sys, "_MEIPASS", None)
+    bundled_ver = _detect_bundled_python_version(meipass) if meipass else ""
+
+    # 2. Buscar python.exe DENTRO de _internal/ (incluido explícitamente en el build)
+    #    Es la opción más segura: misma versión garantizada, no depende del sistema.
+    if meipass and _platform.system() == "Windows":
+        for py_name in ("python.exe", "python3.exe"):
+            candidate = os.path.join(meipass, py_name)
+            if os.path.isfile(candidate):
+                return candidate
+
+    # 3. Buscar junto al bundle: el venv que lo compiló suele estar en
     #    <dist_folder>/../../../  (relativo a _MEIPASS que es <dist>/Nopolo-x/_internal)
     #
     #    En Windows los venvs usan Scripts\ en lugar de bin/.
     #    Intentamos preferir la versión que coincide con el DLL bundleado.
     try:
-        import sys as _sys, platform as _platform
-        meipass = getattr(_sys, "_MEIPASS", None)
+        import sys as _sys
         if meipass:
-            bundled_ver = _detect_bundled_python_version(meipass)
             # _internal → Nopolo-x → dist → workspace
             for levels_up in (3, 4, 5):
                 candidate_dir = os.path.normpath(
@@ -92,16 +102,8 @@ def _find_python_executable() -> str:
     except Exception:
         pass
 
-    # 3. Buscar en PATH del sistema — skip Windows Store stubs y versiones incompatibles
+    # 4. Buscar en PATH del sistema — solo si coincide con la versión bundleada
     import shutil, platform as _plat
-    bundled_ver = None
-    try:
-        meipass = getattr(sys, "_MEIPASS", None)
-        if meipass:
-            bundled_ver = _detect_bundled_python_version(meipass)
-    except Exception:
-        pass
-
     candidates = (["python3", "python"] if _plat.system() != "Windows"
                   else ["python.exe", "python3.exe", "python"])
 
@@ -109,21 +111,20 @@ def _find_python_executable() -> str:
         found = shutil.which(py_name)
         if not found:
             continue
-        if _is_windows_store_python(found):     # stubs incompatibles
+        if _is_windows_store_python(found):
             continue
         if bundled_ver and not _python_version_matches(found, bundled_ver):
             continue
         return found
 
-    # 3b. Segundo intento sin filtro de versión (si no hay match exacto; ej. no
-    #     hay Python 3.10 instalado aparte)
+    # 4b. Segundo intento sin filtro de versión — último recurso, puede fallar
+    #     con conflicto de DLL si la versión no coincide.
     for py_name in candidates:
         found = shutil.which(py_name)
         if found and not _is_windows_store_python(found):
             return found
 
     # Fallback: devolver sys.executable aunque no funcione para '-c'
-    # (al menos el error será claro)
     return sys.executable
 
 
@@ -227,6 +228,14 @@ def log(msg: str):
 # ── Setup del entorno ─────────────────────────────────────────────────────────
 base_dir = sys.argv[1]
 sys.path.insert(0, base_dir)
+
+# En modo build los módulos están en _internal/ (sys._MEIPASS del proceso padre).
+# El worker es un proceso Python normal, no PyInstaller, así que necesita
+# _internal/ en su sys.path explícitamente.
+_internal = os.path.join(base_dir, "_internal")
+if os.path.isdir(_internal) and _internal not in sys.path:
+    sys.path.insert(1, _internal)
+
 os.chdir(base_dir)
 
 os.environ["index_root"]  = os.path.join(base_dir, "voices")
@@ -401,6 +410,18 @@ class PersistentSubprocessProcessor:
 
         python_exe = _find_python_executable()
         _tprint(f"[PersistentProcessor] Python para worker: {python_exe}")
+
+        # Si python_exe está dentro de _internal/, necesita que _internal/
+        # esté en PYTHONPATH para encontrar todos los módulos bundleados
+        # (core/, torch, soundfile, etc.) y en PATH para encontrar las DLLs.
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            # Agregar _internal/ al PYTHONPATH del worker
+            existing_pypath = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = meipass + (os.pathsep + existing_pypath if existing_pypath else "")
+            # En Windows también agregar al PATH para que las DLLs sean encontradas
+            if sys.platform == "win32":
+                env["PATH"] = meipass + os.pathsep + env.get("PATH", "")
 
         # En modo build sys.executable no acepta '-c': escribimos el script
         # a un archivo temporal y lo ejecutamos como 'python worker.py base_dir'
