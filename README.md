@@ -34,6 +34,19 @@ El proyecto funciona **completamente local** en tu equipo, sin depender de servi
 
 > **Nota para usuarios de Mac:** Nopolo detecta automáticamente macOS y ajusta el procesamiento para evitar problemas con MPS. Usa el script `./run_nopolo.sh` para mejor rendimiento.
 
+---
+
+## ⚠️ Windows SmartScreen
+
+Al ejecutar Nopolo por primera vez en Windows, es posible que aparezca el mensaje **"Windows protegió tu PC"** o **"Aplicación no reconocida"**.
+
+Esto ocurre porque Nopolo es un proyecto open source gratuito y **no tiene una firma de código comercial** (costosa y no viable para proyectos sin fines de lucro). No es un virus ni malware — puedes revisar el código fuente completo en este repositorio.
+
+**Para ejecutarlo igual:**
+1. Haz clic en **"Más información"**
+2. Haz clic en **"Ejecutar de todas formas"**
+
+> Este aviso desaparece automáticamente a medida que más usuarios descargan y ejecutan la aplicación sin reportar problemas.
 
 ---
 

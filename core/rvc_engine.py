@@ -1,5 +1,6 @@
 import sys
 import os
+import ssl
 import tempfile
 import numpy as np
 import gc
@@ -27,6 +28,38 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'rvc'))
 
 from rvc.modules.vc.modules import VC
 from .models import RVCConfig
+
+
+def _download_model(url: str, dest_path: str):
+    """
+    Descarga un archivo desde una URL con manejo robusto de SSL.
+    Intenta primero con verificación SSL normal; si falla por certificados
+    (común en Windows frescos / servidores sin certs actualizados),
+    reintenta deshabilitando la verificación.
+    """
+    import urllib.request
+
+    def _urlretrieve(url, dest, ssl_context=None):
+        opener = urllib.request.build_opener()
+        if ssl_context:
+            opener.add_handler(urllib.request.HTTPSHandler(context=ssl_context))
+        urllib.request.install_opener(opener)
+        try:
+            urllib.request.urlretrieve(url, dest)
+        finally:
+            urllib.request.install_opener(urllib.request.build_opener())
+
+    try:
+        _urlretrieve(url, dest_path)
+    except urllib.error.URLError as e:
+        if "CERTIFICATE_VERIFY_FAILED" in str(e) or "SSL" in str(e):
+            print(f"  SSL verification falló, reintentando sin verificación SSL...")
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            _urlretrieve(url, dest_path, ssl_context=ctx)
+        else:
+            raise
 
 
 class RVCEngine:
@@ -120,7 +153,7 @@ class RVCEngine:
         url = "https://huggingface.co/lj1995/VoiceConversionWebUI/resolve/main/hubert_base.pt"
         
         try:
-            urllib.request.urlretrieve(url, hubert_path)
+            _download_model(url, hubert_path)
             print("Modelo Hubert descargado")
             return hubert_path
         except Exception as e:
@@ -148,11 +181,10 @@ class RVCEngine:
         os.makedirs(rmvpe_dir, exist_ok=True)
         
         print("Descargando modelo RMVPE (tamaño ~60MB)...")
-        import urllib.request
         url = "https://huggingface.co/lj1995/VoiceConversionWebUI/resolve/main/rmvpe.pt"
         
         try:
-            urllib.request.urlretrieve(url, rmvpe_path)
+            _download_model(url, rmvpe_path)
             print("Modelo RMVPE descargado")
             return rmvpe_path
         except Exception as e:
