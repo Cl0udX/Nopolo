@@ -27,6 +27,7 @@ scipy>=1.10.0
 # TTS
 edge-tts>=6.1.0
 google-cloud-texttospeech>=2.16.0
+azure-cognitiveservices-speech>=1.38.0
 
 # API
 fastapi>=0.109.0

@@ -356,16 +356,14 @@ def show_output_info(system_name):
     print(f"   ├── {exe_name:<28} ← Ejecutable principal")
     if system_name == "macos":
         print(f"   ├── {__app_name__ + '.command':<28} ← Doble clic para abrir (macOS) 🍎")
-    print(f"   ├── _internal/                   ← Librerías Python")
-    print(f"   ├── backgrounds/                 ← Fondos (nivel raíz) ✅")
-    print(f"   ├── voices/                      ← Modelos RVC (nivel raíz) ✅")
-    print(f"   ├── sounds/                      ← Efectos de sonido (nivel raíz) ✅")
-    print(f"   ├── overlay/                     ← Overlay files (nivel raíz) ✅")
-    print(f"   ├── config/                      ← Configuración (nivel raíz) ✅")
-    print(f"   ├── .env                         ← Variables de entorno (si existe)")
-    print(f"   ├── .env.example                 ← Ejemplo de configuración")
-    print(f"   ├── README.md                    ← Documentación")
-    print(f"   └── LICENSE                      ← Licencia")
+    print(f"   ├── README.md")
+    print(f"   ├── LICENSE")
+    print(f"   └── _internal/                   ← Librerías + datos del bundle")
+    print(f"       ├── backgrounds/")
+    print(f"       ├── voices/")
+    print(f"       ├── sounds/")
+    print(f"       ├── overlay/")
+    print(f"       └── config/")
 
     print(f"\n▶️  Para ejecutar:")
     print(run_hint.format(exe_name=exe_name))
@@ -427,9 +425,6 @@ def main():
     if not build_executable(system_name, arch):
         print(f"\n{Colors.FAIL}❌ Build falló. Revisa los errores arriba.{Colors.ENDC}")
         sys.exit(1)
-    
-    # IMPORTANTE: Mover carpetas fuera de _internal/
-    move_folders_outside_internal()
     
     # Copiar archivos adicionales
     copy_additional_files()

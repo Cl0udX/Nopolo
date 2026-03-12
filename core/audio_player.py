@@ -21,7 +21,17 @@ def stop_audio():
     """Detiene el audio que está sonando actualmente"""
     global _stop_flag, _current_stream
     _stop_flag = True
-    sd.stop()
+    # Detener OutputStream activo si existe
+    if hasattr(_current_stream, 'stop'):
+        try:
+            _current_stream.stop()
+        except Exception:
+            pass
+    # Fallback para sd.play() legacy
+    try:
+        sd.stop()
+    except Exception:
+        pass
 
 def play_wav(wav_tuple, on_before_play=None, on_after_play=None):
     """
@@ -61,38 +71,47 @@ def play_wav(wav_tuple, on_before_play=None, on_after_play=None):
             print("Advertencia: Audio vacío, saltando reproducción")
             return
 
-        # Aplicar volumen global
-        if _volume != 1.0:
-            data = data * _volume
-        
         # Fix para macOS: asegurar que el audio sea mono o estéreo correctamente
         if len(data.shape) == 1:
             data = data.reshape(-1, 1)
-        
-        # Reproducir y esperar, pero permitir detener
+
+        channels = data.shape[1]
+        position = [0]
+
+        def _callback(outdata, frames, time_info, status):
+            if _stop_flag:
+                outdata[:] = 0
+                raise sd.CallbackStop()
+            remaining = len(data) - position[0]
+            n = min(frames, remaining)
+            outdata[:n] = data[position[0]:position[0] + n] * _volume
+            if n < frames:
+                outdata[n:] = 0
+                raise sd.CallbackStop()
+            position[0] += n
+
         try:
-            sd.play(data, sr)
-            _current_stream = True
-            
-            # Esperar mientras el audio está activo
-            while sd.get_stream().active:
-                if _stop_flag:
-                    sd.stop()
-                    break
-                time.sleep(0.1)  # Dormir 100ms entre verificaciones
-                
-        except Exception as e:
-            # Si falla get_stream(), usar wait() tradicional pero revisar stop_flag
+            stream = sd.OutputStream(
+                samplerate=sr,
+                channels=channels,
+                dtype='float32',
+                callback=_callback,
+            )
+            _current_stream = stream
+            with stream:
+                while stream.active and not _stop_flag:
+                    time.sleep(0.05)
+        except Exception:
+            # Fallback: sd.play con volumen estático snapshot
             try:
-                duration = len(data) / sr
-                elapsed = 0
-                while elapsed < duration:
+                sd.play(data * _volume, sr)
+                _current_stream = True
+                while sd.get_stream().active:
                     if _stop_flag:
                         sd.stop()
                         break
                     time.sleep(0.1)
-                    elapsed += 0.1
-            except:
+            except Exception:
                 sd.wait()
         finally:
             _current_stream = None
@@ -145,11 +164,10 @@ def play_wav_with_peaks(wav_tuple, on_peak=None,
         if len(data) == 0:
             return
 
-        if _volume != 1.0:
-            data = data * _volume
-
         if len(data.shape) == 1:
             data = data.reshape(-1, 1)
+
+        channels = data.shape[1]
 
         # Pre-computar eventos de peak desde los datos de audio
         stop_peak = threading.Event()
@@ -184,29 +202,55 @@ def play_wav_with_peaks(wav_tuple, on_peak=None,
 
         peak_thread = threading.Thread(target=_peak_driver, daemon=True)
 
+        position = [0]
+
+        def _callback(outdata, frames, time_info, status):
+            if _stop_flag:
+                outdata[:] = 0
+                raise sd.CallbackStop()
+            remaining = len(data) - position[0]
+            n = min(frames, remaining)
+            outdata[:n] = data[position[0]:position[0] + n] * _volume
+            if n < frames:
+                outdata[n:] = 0
+                raise sd.CallbackStop()
+            position[0] += n
+
         try:
-            sd.play(data, sr)
-            peak_thread.start()
-            _current_stream = True
-
-            while sd.get_stream().active:
-                if _stop_flag:
-                    sd.stop()
-                    break
-                time.sleep(0.05)
-
+            stream = sd.OutputStream(
+                samplerate=sr,
+                channels=channels,
+                dtype='float32',
+                callback=_callback,
+            )
+            _current_stream = stream
+            with stream:
+                peak_thread.start()
+                while stream.active and not _stop_flag:
+                    time.sleep(0.05)
         except Exception:
+            # Fallback: sd.play con volumen estático snapshot
             try:
-                duration = len(data) / sr
-                elapsed = 0
-                while elapsed < duration:
+                sd.play(data * _volume, sr)
+                peak_thread.start()
+                _current_stream = True
+                while sd.get_stream().active:
                     if _stop_flag:
                         sd.stop()
                         break
                     time.sleep(0.05)
-                    elapsed += 0.05
             except Exception:
-                sd.wait()
+                try:
+                    duration = len(data) / sr
+                    elapsed = 0
+                    while elapsed < duration:
+                        if _stop_flag:
+                            sd.stop()
+                            break
+                        time.sleep(0.05)
+                        elapsed += 0.05
+                except Exception:
+                    sd.wait()
         finally:
             stop_peak.set()
             _current_stream = None

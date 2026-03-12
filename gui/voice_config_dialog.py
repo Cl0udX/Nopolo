@@ -6,7 +6,8 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QTabWidget, QWidget, QLineEdit, QPushButton, 
     QComboBox, QLabel, QCheckBox, QSlider, QSpinBox,
-    QFileDialog, QMessageBox, QGroupBox, QTextEdit
+    QFileDialog, QMessageBox, QGroupBox, QTextEdit,
+    QScrollArea, QSizePolicy
 )
 from PySide6.QtCore import Qt
 from core.models import VoiceProfile, EdgeTTSConfig, RVCConfig
@@ -34,7 +35,8 @@ class VoiceConfigDialog(QDialog):
         self.temp_rvc_engine = None
         
         self.setWindowTitle("Editar Voz" if self.is_edit_mode else "Agregar Nueva Voz")
-        self.resize(700, 800)
+        self.setMinimumWidth(600)
+        self.resize(700, 700)
         
         self._build_ui()
         
@@ -44,7 +46,16 @@ class VoiceConfigDialog(QDialog):
     
     def _build_ui(self):
         """Construye la interfaz"""
-        main_layout = QVBoxLayout()
+        outer_layout = QVBoxLayout()
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # --- Scroll area wraps everything except the action buttons ---
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        scroll_content = QWidget()
+        main_layout = QVBoxLayout(scroll_content)
         
         # --- Información básica ---
         basic_group = QGroupBox("Información Básica")
@@ -103,8 +114,13 @@ class VoiceConfigDialog(QDialog):
         test_group.setLayout(test_layout)
         main_layout.addWidget(test_group)
         
-        # --- Botones de acción ---
+        main_layout.addStretch()
+        scroll_area.setWidget(scroll_content)
+        outer_layout.addWidget(scroll_area)
+        
+        # --- Botones de acción (fuera del scroll) ---
         button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(8, 4, 8, 8)
         
         self.save_btn = QPushButton("💾 Guardar" if self.is_edit_mode else "➕ Agregar Voz")
         self.save_btn.clicked.connect(self._save)
@@ -115,9 +131,9 @@ class VoiceConfigDialog(QDialog):
         self.cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_btn)
         
-        main_layout.addLayout(button_layout)
+        outer_layout.addLayout(button_layout)
         
-        self.setLayout(main_layout)
+        self.setLayout(outer_layout)
     
     def _build_tts_tab(self):
         """Construye el tab de configuración TTS"""
@@ -207,7 +223,34 @@ class VoiceConfigDialog(QDialog):
         
         config_group.setLayout(config_layout)
         main_layout.addWidget(config_group)
-        
+
+        # ========== Credenciales Azure TTS (oculto por defecto) ==========
+        self.azure_creds_group = QGroupBox("☁️ Credenciales Azure Cognitive Services")
+        azure_layout = QFormLayout()
+
+        self.azure_key_input = QLineEdit()
+        self.azure_key_input.setPlaceholderText("Subscription Key (32 chars)")
+        self.azure_key_input.setEchoMode(QLineEdit.Password)
+        azure_layout.addRow("Subscription Key:", self.azure_key_input)
+
+        self.azure_region_input = QLineEdit()
+        self.azure_region_input.setPlaceholderText("ej: eastus, westeurope")
+        self.azure_region_input.setText("eastus")
+        azure_layout.addRow("Región:", self.azure_region_input)
+
+        show_key_btn = QPushButton("👁 Mostrar/Ocultar Key")
+        show_key_btn.setCheckable(True)
+        show_key_btn.toggled.connect(
+            lambda checked: self.azure_key_input.setEchoMode(
+                QLineEdit.Normal if checked else QLineEdit.Password
+            )
+        )
+        azure_layout.addRow("", show_key_btn)
+
+        self.azure_creds_group.setLayout(azure_layout)
+        self.azure_creds_group.setVisible(False)
+        main_layout.addWidget(self.azure_creds_group)
+
         main_layout.addStretch()
         widget.setLayout(main_layout)
         return widget
@@ -524,6 +567,18 @@ class VoiceConfigDialog(QDialog):
             else:
                 volume = float(volume_str)
             self.volume_slider.setValue(int(volume * 100))
+        elif provider_name == 'azure_tts':
+            # Azure TTS usa speed/pitch/volume como números
+            self.speed_slider.setValue(int(getattr(tts, 'speed', 1.0) * 100))
+            self.pitch_spinbox.setValue(getattr(tts, 'pitch', 0))
+            self.volume_slider.setValue(int(getattr(tts, 'volume', 1.0) * 100))
+            # Cargar credenciales Azure si están en el config
+            if hasattr(self, 'azure_key_input'):
+                self.azure_key_input.setText(getattr(tts, 'subscription_key', ''))
+            if hasattr(self, 'azure_region_input'):
+                self.azure_region_input.setText(getattr(tts, 'region', 'eastus'))
+            if hasattr(self, 'azure_creds_group'):
+                self.azure_creds_group.setVisible(True)
         else:
             # Edge TTS y otros usan speed/pitch/volume como números
             self.speed_slider.setValue(int(getattr(tts, 'speed', 1.0) * 100))
@@ -713,9 +768,13 @@ class VoiceConfigDialog(QDialog):
         engine_type = self.engine_combo.currentData()
         if not engine_type:
             return
-        
+
         print(f"Cambiando a engine: {engine_type}")
-        
+
+        # Mostrar/ocultar credenciales Azure
+        if hasattr(self, 'azure_creds_group'):
+            self.azure_creds_group.setVisible(engine_type == 'azure_tts')
+
         # Recargar voces del nuevo engine
         self._load_voices_for_engine(engine_type)
     
@@ -771,6 +830,35 @@ class VoiceConfigDialog(QDialog):
                     for voice in lang_voices:
                         voice_label = f"{voice['name']} ({voice['gender']})"
                         self.voice_combo.addItem(voice_label, voice['id'])
+
+            elif engine_type == "azure_tts":
+                try:
+                    from core.tts.azure_provider import AzureTTSProvider, AzureTTSConfig
+                    # Leer key del campo de texto; si está vacío, usar la clave guardada en ProviderManager
+                    key = self.azure_key_input.text().strip() if hasattr(self, 'azure_key_input') else ''
+                    if not key:
+                        key = self.provider_manager.get_provider_credentials("azure_tts") or ''
+                    region = self.azure_region_input.text().strip() if hasattr(self, 'azure_region_input') else ''
+                    if not region:
+                        region = self.provider_manager.get_provider_region("azure_tts") or 'eastus'
+
+                    if key:
+                        config = AzureTTSConfig(subscription_key=key, region=region)
+                        provider = AzureTTSProvider(config)
+                        voices = provider.get_available_voices()
+                        by_language = {}
+                        for v in voices:
+                            lang = v.get('language', 'Unknown')
+                            by_language.setdefault(lang, []).append(v)
+                        for lang, lang_voices in sorted(by_language.items()):
+                            self.voice_combo.addItem(f"── {lang} ──", None)
+                            self.voice_combo.model().item(self.voice_combo.count() - 1).setEnabled(False)
+                            for v in lang_voices:
+                                self.voice_combo.addItem(f"   {v['name']} ({v['gender']})", v['id'])
+                    else:
+                        self.voice_combo.addItem("⚠ Configura Azure en Proveedores primero", None)
+                except Exception as e:
+                    self.voice_combo.addItem(f"Error: {e}", None)
         
         except Exception as e:
             print(f"Error cargando voces de {engine_type}: {e}")
@@ -813,6 +901,23 @@ class VoiceConfigDialog(QDialog):
                 pitch=self.pitch_spinbox.value(),
                 sample_rate=44100,
                 credentials_path=None
+            )
+        elif provider_name == 'azure_tts':
+            from core.tts.azure_provider import AzureTTSConfig
+            parts = (voice_id or 'es-MX-DaliaNeural').split('-')
+            language_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else "es-MX"
+            key = (self.azure_key_input.text().strip() if hasattr(self, 'azure_key_input') else '') \
+                  or self.provider_manager.get_provider_credentials('azure_tts') or ''
+            region = (self.azure_region_input.text().strip() if hasattr(self, 'azure_region_input') else '') \
+                     or self.provider_manager.get_provider_region('azure_tts') or 'eastus'
+            return AzureTTSConfig(
+                voice_id=voice_id or 'es-MX-DaliaNeural',
+                language_code=language_code,
+                speed=self.speed_slider.value() / 100.0,
+                pitch=self.pitch_spinbox.value(),
+                volume=self.volume_slider.value() / 100.0,
+                subscription_key=key,
+                region=region,
             )
         else:
             # Edge TTS y otros proveedores

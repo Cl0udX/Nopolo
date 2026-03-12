@@ -12,3 +12,10 @@ __all__ = [
     'RVCConfig',
     'VoiceProfile'
 ]
+
+# AzureTTSConfig importado condicionalmente (requiere azure-cognitiveservices-speech)
+try:
+    from core.tts.azure_provider import AzureTTSConfig
+    __all__.append('AzureTTSConfig')
+except ImportError:
+    pass

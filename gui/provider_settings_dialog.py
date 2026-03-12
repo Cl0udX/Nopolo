@@ -103,6 +103,10 @@ class ProviderSettingsDialog(QDialog):
         # Google Cloud TTS
         google_action = menu.addAction("🌐 Google Cloud TTS")
         google_action.triggered.connect(lambda: self._add_google_tts())
+
+        # Azure Cognitive Services TTS
+        azure_action = menu.addAction("☁️ Azure Cognitive Services TTS")
+        azure_action.triggered.connect(lambda: self._add_azure_tts())
         
         # ElevenLabs (deshabilitado por ahora)
         eleven_action = menu.addAction("🎙️ ElevenLabs (Próximamente)")
@@ -110,6 +114,69 @@ class ProviderSettingsDialog(QDialog):
         
         menu.exec(QCursor.pos())
     
+    def _add_azure_tts(self):
+        """Agrega Azure Cognitive Services TTS"""
+        from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QDialogButtonBox
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Configurar Azure Cognitive Services TTS")
+        dialog.resize(420, 150)
+
+        layout = QVBoxLayout()
+
+        info = QLabel(
+            "Ingresa tu clave de suscripción de Azure y la región.\n"
+            "Puedes obtenerlos en portal.azure.com → Cognitive Services."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        form = QFormLayout()
+        key_input = QLineEdit()
+        key_input.setPlaceholderText("ej: a1b2c3d4e5f6...")
+        key_input.setEchoMode(QLineEdit.Password)
+        form.addRow("Clave de suscripción:", key_input)
+
+        region_input = QLineEdit()
+        region_input.setPlaceholderText("ej: eastus, westeurope")
+        region_input.setText("eastus")
+        form.addRow("Región:", region_input)
+
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        dialog.setLayout(layout)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        key = key_input.text().strip()
+        region = region_input.text().strip() or "eastus"
+
+        if not key:
+            QMessageBox.warning(self, "Campo requerido", "Debes ingresar una clave de suscripción.")
+            return
+
+        if self.provider_manager.add_azure_provider(key, region):
+            QMessageBox.information(
+                self,
+                "Éxito",
+                "Azure Cognitive Services TTS configurado correctamente.\n\n"
+                f"Región: {region}\n"
+                "Ahora puedes usarlo en la configuración de voces."
+            )
+            self._load_providers()
+        else:
+            QMessageBox.critical(
+                self,
+                "Error",
+                "No se pudo configurar Azure TTS.\nVerifica la clave de suscripción."
+            )
+
     def _add_google_tts(self):
         """Agrega Google Cloud TTS"""
         # Pedir archivo de credenciales

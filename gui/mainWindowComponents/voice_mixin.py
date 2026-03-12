@@ -115,6 +115,8 @@ class VoiceMixin:
             # Voz editada exitosamente
             self.log_to_console(f"Voz actualizada: {dialog.get_profile().display_name}")
             self._load_voices()
+            # Reactivar el engine con la config a actualizada
+            self._on_voice_changed(self.voice_combo.currentIndex())
     
     def _scan_models(self):
         """Escanea y agrega automáticamente nuevos modelos"""
@@ -181,7 +183,7 @@ class VoiceMixin:
         
         try:
             # Recargar configuración desde archivo
-            self.voice_manager._load_config()
+            self.voice_manager.load_from_file()
             
             # Recargar lista en la GUI
             self._load_voices()

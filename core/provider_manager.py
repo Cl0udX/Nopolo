@@ -124,6 +124,15 @@ class ProviderManager:
                 "credentials": None,
                 "icon": "🌐"
             },
+            "azure_tts": {
+                "name": "Azure Cognitive Services TTS",
+                "type": "azure_tts",
+                "enabled": True,
+                "requires_credentials": True,
+                "credentials": None,
+                "region": "eastus",
+                "icon": "☁️"
+            },
             "elevenlabs": {
                 "name": "ElevenLabs",
                 "type": "elevenlabs",
@@ -170,6 +179,39 @@ class ProviderManager:
         
         return True
     
+    def add_azure_provider(self, subscription_key: str, region: str = "eastus") -> bool:
+        """
+        Agrega o actualiza Azure Cognitive Services TTS.
+
+        Args:
+            subscription_key: Clave de suscripción de Azure
+            region: Región de Azure (ej: eastus, westeurope)
+
+        Returns:
+            True si se configuró correctamente
+        """
+        if not subscription_key or not subscription_key.strip():
+            print("Se requiere una clave de suscripción de Azure")
+            return False
+
+        self.providers["azure_tts"] = {
+            "name": "Azure Cognitive Services TTS",
+            "type": "azure_tts",
+            "enabled": True,
+            "requires_credentials": True,
+            "credentials": subscription_key.strip(),
+            "region": region.strip() or "eastus",
+            "icon": "☁️"
+        }
+        self.save_to_file()
+        print("Azure Cognitive Services TTS configurado")
+        return True
+
+    def get_provider_region(self, provider_type: str) -> str:
+        """Retorna la región configurada para un provider (usado por Azure TTS)."""
+        provider = self.providers.get(provider_type)
+        return provider.get("region", "eastus") if provider else "eastus"
+
     def save_to_file(self):
         """Guarda configuración a JSON"""
         try:

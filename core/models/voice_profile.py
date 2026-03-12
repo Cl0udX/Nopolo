@@ -73,6 +73,17 @@ class VoiceProfile:
                 sample_rate=tts_data.get('sample_rate', 24000),
                 credentials_path=tts_data.get('credentials_path', None)
             )
+        elif provider_name == 'azure_tts':
+            from core.tts.azure_provider import AzureTTSConfig
+            tts_config = AzureTTSConfig(
+                voice_id=tts_data.get('voice_id', 'es-MX-DaliaNeural'),
+                language_code=tts_data.get('language_code', 'es-MX'),
+                speed=tts_data.get('speed', 1.0),
+                pitch=tts_data.get('pitch', 0),
+                volume=tts_data.get('volume', 1.0),
+                subscription_key=tts_data.get('subscription_key', ''),
+                region=tts_data.get('region', 'eastus'),
+            )
         else:
             # Para otros engines, usar BaseTTSConfig con solo campos básicos
             tts_config = BaseTTSConfig(

@@ -147,11 +147,11 @@ def get_bundle_data_dir() -> Path:
     Directorio donde están las carpetas editables empaquetadas con el build
     (backgrounds/, voices/, sounds/, overlay/, config/).
 
-    - build : padre de _MEIPASS  ← build_executable.py las movió ahí afuera
+    - build : _MEIPASS (dentro de _internal/) ← carpetas quedan en _internal
     - dev   : raíz del repositorio (mismo que get_app_base_dir)
     """
     if _is_frozen():
-        return Path(sys._MEIPASS).parent
+        return Path(sys._MEIPASS)  # type: ignore[attr-defined]
     return get_app_base_dir()
 
 

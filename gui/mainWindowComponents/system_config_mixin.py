@@ -126,6 +126,21 @@ class SystemConfigMixin:
                 f"Error al cargar dispositivos de audio:\n{str(e)}"
             )
     
+    def _update_audio_device_btn_text(self, device_id):
+        """Actualiza el texto del botón de dispositivo de audio con el nombre del dispositivo."""
+        if not hasattr(self, 'audio_device_btn'):
+            return
+        try:
+            import sounddevice as sd
+            if device_id is None:
+                self.audio_device_btn.setText("🔊 Dispositivo de Salida")
+            else:
+                name = sd.query_devices()[device_id]['name']
+                short_name = (name[:24] + "…") if len(name) > 25 else name
+                self.audio_device_btn.setText(f"🔊 {short_name}")
+        except Exception:
+            pass
+
     def _set_audio_device(self, device_id, dialog):
         """Establece el dispositivo de audio"""
         try:
@@ -148,6 +163,7 @@ class SystemConfigMixin:
                 device_name = devices[device_id]['name']
                 self.log_to_console(f"✅ Dispositivo de audio: {device_name}")
             
+            self._update_audio_device_btn_text(device_id)
             dialog.accept()
             
         except Exception as e:
@@ -175,6 +191,7 @@ class SystemConfigMixin:
                     device_name = devices[device_id]['name']
                     sd.default.device = sd.default.device[0], device_id
                     self.log_to_console(f"🔊 Dispositivo de audio: {device_name}")
+                    self._update_audio_device_btn_text(device_id)
                 except Exception as e:
                     self.log_to_console(f"⚠️ Error cargando dispositivo de audio configurado: {e}")
                     self.log_to_console("🔊 Usando dispositivo predeterminado del sistema")

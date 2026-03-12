@@ -13,6 +13,13 @@ try:
 except ImportError:
     GOOGLE_AVAILABLE = False
 
+# Importación condicional de Azure TTS
+try:
+    from .azure_provider import AzureTTSProvider, AzureTTSConfig
+    AZURE_AVAILABLE = True
+except ImportError:
+    AZURE_AVAILABLE = False
+
 
 class TTSProviderFactory:
     """Factory para crear proveedores TTS"""
@@ -25,6 +32,10 @@ class TTSProviderFactory:
     # Agregar Google si está disponible
     if GOOGLE_AVAILABLE:
         _providers['google_tts'] = GoogleTTSProvider
+    
+    # Agregar Azure si está disponible
+    if AZURE_AVAILABLE:
+        _providers['azure_tts'] = AzureTTSProvider
     
     @classmethod
     def create(cls, provider_name: str, config=None) -> BaseTTSProvider:
