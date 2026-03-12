@@ -157,6 +157,21 @@ try:
 except Exception as e:
     print(f"\n⚠ WARNING: No se pudieron recolectar librerías dinámicas de Torch: {e}")
 
+# Bundlear ffmpeg y ffprobe para que pydub funcione sin instalación externa
+import shutil as _build_shutil2
+for _ff_bin in ("ffmpeg", "ffprobe", "ffmpeg.exe", "ffprobe.exe"):
+    _ff_path = _build_shutil2.which(_ff_bin)
+    if _ff_path and os.path.isfile(_ff_path):
+        binaries.append((_ff_path, "."))
+        print(f"\n{_ff_bin} incluido en bundle: {_ff_path}")
+        break  # solo necesitamos uno por tipo
+for _ff_bin in ("ffprobe", "ffprobe.exe"):
+    _ff_path = _build_shutil2.which(_ff_bin)
+    if _ff_path and os.path.isfile(_ff_path):
+        binaries.append((_ff_path, "."))
+        print(f"\nffprobe incluido en bundle: {_ff_path}")
+        break
+
 # En Windows: incluir python.exe dentro de _internal/ para que el worker
 # subprocess use exactamente la misma versión que compiló el bundle.
 # Sin esto, si el usuario tiene Python 3.12 en el PATH se produce:

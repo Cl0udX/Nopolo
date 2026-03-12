@@ -90,6 +90,29 @@ def _is_frozen() -> bool:
     return getattr(sys, "frozen", False)
 
 
+def _configure_bundled_ffmpeg() -> None:
+    """Apunta pydub al ffmpeg bundled cuando corremos como ejecutable.
+    En sistemas frescos sin ffmpeg en PATH pydub falla al convertir MP3→WAV."""
+    if not _is_frozen():
+        return
+    try:
+        import pydub
+        base = Path(sys._MEIPASS)  # type: ignore[attr-defined]
+        ext = ".exe" if sys.platform == "win32" else ""
+        ffmpeg_path  = base / f"ffmpeg{ext}"
+        ffprobe_path = base / f"ffprobe{ext}"
+        if ffmpeg_path.exists():
+            pydub.AudioSegment.converter  = str(ffmpeg_path)
+            pydub.AudioSegment.ffmpeg     = str(ffmpeg_path)
+        if ffprobe_path.exists():
+            pydub.AudioSegment.ffprobe    = str(ffprobe_path)
+    except Exception:
+        pass  # pydub no disponible aún, no es crítico aquí
+
+
+_configure_bundled_ffmpeg()
+
+
 def get_run_mode() -> str:
     """
     Devuelve 'build' o 'dev' según el entorno de ejecución.

@@ -20,6 +20,7 @@ import logging
 import os
 import platform
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,15 @@ from pathlib import Path
 from typing import Callable, Optional
 from urllib.request import urlopen, urlretrieve
 from urllib.error import URLError
+
+
+def _make_ssl_context():
+    """Devuelve un SSLContext sin verificación de certificados.
+    Usado como fallback en sistemas sin CAs actualizados (Windows frescos/servidores)."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 logger = logging.getLogger(__name__)
 
@@ -160,8 +170,16 @@ def check_for_updates(custom_url: str = None) -> UpdateInfo:
     )
 
     try:
-        with urlopen(req, timeout=HTTP_TIMEOUT) as resp:
-            remote = json.loads(resp.read().decode("utf-8"))
+        try:
+            with urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+                remote = json.loads(resp.read().decode("utf-8"))
+        except URLError as e:
+            if "CERTIFICATE_VERIFY_FAILED" in str(e) or "SSL" in str(e):
+                logger.debug("[updater] SSL fallback activado para check de versión")
+                with urlopen(req, timeout=HTTP_TIMEOUT, context=_make_ssl_context()) as resp:
+                    remote = json.loads(resp.read().decode("utf-8"))
+            else:
+                raise
     except URLError as e:
         info.error = f"Sin conexión o URL inaccesible: {e}"
         logger.warning(f"[updater] {info.error}")
@@ -370,30 +388,39 @@ def _download_with_progress(url: str, dest: Path, progress_fn):
 
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
 
-    with urllib.request.urlopen(req) as resp:
-        total_size = int(resp.headers.get("Content-Length", 0))
-        downloaded = 0
-        chunk_size  = 1024 * 256  # 256 KB
+    def _do_download(ctx=None):
+        with urllib.request.urlopen(req, context=ctx) as resp:
+            total_size = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+            chunk_size  = 1024 * 256  # 256 KB
 
-        with open(dest, "wb") as f:
-            while True:
-                chunk = resp.read(chunk_size)
-                if not chunk:
-                    break
-                f.write(chunk)
-                downloaded += len(chunk)
-                if total_size > 0:
-                    pct = min(int(downloaded / total_size * 100), 100)
-                    mb  = downloaded / (1024 * 1024)
-                    total_mb = total_size / (1024 * 1024)
-                    progress_fn(
-                        f"Descargando... {pct}% ({mb:.1f}/{total_mb:.1f} MB)",
-                        downloaded,
-                        total_size,
-                    )
-                else:
-                    mb = downloaded / (1024 * 1024)
-                    progress_fn(f"Descargando... {mb:.1f} MB", downloaded, 0)
+            with open(dest, "wb") as f:
+                while True:
+                    chunk = resp.read(chunk_size)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        pct = min(int(downloaded / total_size * 100), 100)
+                        mb  = downloaded / (1024 * 1024)
+                        total_mb = total_size / (1024 * 1024)
+                        progress_fn(
+                            f"Descargando... {pct}% ({mb:.1f}/{total_mb:.1f} MB)",
+                            downloaded,
+                            total_size,
+                        )
+                    else:
+                        mb = downloaded / (1024 * 1024)
+                        progress_fn(f"Descargando... {mb:.1f} MB", downloaded, 0)
+
+    try:
+        _do_download()
+    except URLError as e:
+        if "CERTIFICATE_VERIFY_FAILED" in str(e) or "SSL" in str(e):
+            _do_download(ctx=_make_ssl_context())
+        else:
+            raise
 
 
 def _find_internal(extract_dir: Path) -> Optional[Path]:
