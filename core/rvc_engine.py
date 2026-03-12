@@ -39,25 +39,25 @@ def _download_model(url: str, dest_path: str):
     """
     import urllib.request
 
-    def _urlretrieve(url, dest, ssl_context=None):
-        opener = urllib.request.build_opener()
-        if ssl_context:
-            opener.add_handler(urllib.request.HTTPSHandler(context=ssl_context))
-        urllib.request.install_opener(opener)
-        try:
-            urllib.request.urlretrieve(url, dest)
-        finally:
-            urllib.request.install_opener(urllib.request.build_opener())
+    def _fetch(url, dest, ctx=None):
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, context=ctx) as response:
+            with open(dest, 'wb') as f:
+                while True:
+                    chunk = response.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
 
     try:
-        _urlretrieve(url, dest_path)
+        _fetch(url, dest_path)
     except urllib.error.URLError as e:
         if "CERTIFICATE_VERIFY_FAILED" in str(e) or "SSL" in str(e):
             print(f"  SSL verification falló, reintentando sin verificación SSL...")
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-            _urlretrieve(url, dest_path, ssl_context=ctx)
+            _fetch(url, dest_path, ctx=ctx)
         else:
             raise
 
