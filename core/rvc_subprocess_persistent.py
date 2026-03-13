@@ -408,9 +408,10 @@ class PersistentSubprocessProcessor:
         """
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
-        # Asegurar que el worker subprocess también sepa que está en modo build
-        if "NOPOLO_ENV" not in env:
-            env["NOPOLO_ENV"] = "build"
+        # Heredar el modo de ejecución del proceso padre (dev/build)
+        # El worker debe usar el mismo directorio de datos que el padre
+        from core.paths import get_run_mode
+        env["NOPOLO_ENV"] = get_run_mode()
 
         python_exe = _find_python_executable()
         _tprint(f"[PersistentProcessor] Python para worker: {python_exe}")
