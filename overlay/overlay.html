@@ -12,10 +12,19 @@
 
         <div id="overlay-wrapper" class="hidden">
 
-            <!-- ── Cabecera de marca (FUERA del recuadro) ─────────── -->
-            <div id="brand-header">
-                <img id="brand-logo" src="" alt="Logo" />
-                <span id="brand-creator"></span>
+            <!-- ── Contenedor de marca + personaje ─────────────────────── -->
+            <div id="brand-area">
+                <!-- ── Cabecera de marca (FUERA del recuadro) ─────────── -->
+                <div id="brand-header">
+                    <img id="brand-logo" src="" alt="Logo" />
+                    <span id="brand-creator"></span>
+                </div>
+
+                <!-- ── Personaje (a la derecha del brand-header, detrás en z-index) ──── -->
+                <div id="character-wrapper" class="char-hidden">
+                    <img id="char-idle"    src="" alt="" class="char-img char-active" />
+                    <img id="char-talking" src="" alt="" class="char-img" />
+                </div>
             </div>
 
             <!-- ── Cuadro de texto ────────────────────────────────── -->
@@ -26,12 +35,6 @@
 
             </div>
 
-        </div>
-
-        <!-- ── Personaje (a la derecha del overlay, detrás en z-index) ──── -->
-        <div id="character-wrapper" class="char-hidden">
-            <img id="char-idle"    src="" alt="" class="char-img char-active" />
-            <img id="char-talking" src="" alt="" class="char-img" />
         </div>
 
     </div>
@@ -178,10 +181,8 @@
             if (charHideTimeout)    { clearTimeout(charHideTimeout);    charHideTimeout    = null; }
             if (charCrossfadeTimer) { clearTimeout(charCrossfadeTimer); charCrossfadeTimer = null; }
 
-            // ── Posición horizontal dinámica: proporcional al ancho del recuadro de texto
-            // min(200px, 25% del ancho) → mismo look en textos largos, correcto en cortos.
-            const dynamicRight = Math.min(200, Math.floor(container.offsetWidth * 0.25));
-            charWrapper.style.right = dynamicRight + 'px';
+            // El personaje está posicionado con right: 0 dentro de brand-area
+            // No necesitamos calcular posición dinámica
 
             const isVisible = charWrapper.classList.contains('char-show') ||
                               charWrapper.classList.contains('char-hiding');

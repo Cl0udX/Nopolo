@@ -30,7 +30,7 @@
 
 body {
     padding: 24px;
-    padding-top: calc(var(--char-height) * 0.75);  /* espacio para el avatar sobre el recuadro */
+   /* padding-top: calc(var(--char-height) * 0.75);   espacio para el avatar sobre el recuadro */
     font-family: var(--font);
     background: transparent;
     overflow: hidden;
@@ -43,6 +43,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0;
+    width: 860px;              /* ancho fijo para siempre ser máximo */
     max-width: 860px;
     position: relative;
     z-index: 2;
@@ -77,6 +78,20 @@ body {
         0 8px 32px rgba(0,0,0,0.7),
         0 0 24px var(--yellow-glow);
     overflow: hidden;
+    position: relative;
+    z-index: 3;           /* por encima del character-wrapper (z-index 1) */
+}
+
+/* ============================================================
+   ÁREA DE MARCA — contenedor para brand-header + character
+   ============================================================ */
+#brand-area {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    position: relative;
+    width: 100%;           /* mismo ancho que tts-container */
+    gap: 0;
 }
 
 /* ============================================================
@@ -87,6 +102,11 @@ body {
     align-items: center;
     gap: 18px;
     padding: 0 8px 14px;
+    position: relative;
+    z-index: 2;            /* por encima del character-wrapper */
+    flex: 0 1 auto;        /* puede crecer pero no encogerse */
+    min-width: 0;
+    max-width: 100%;       /* no excede el contenedor */
 }
 
 #brand-logo {
@@ -220,8 +240,8 @@ body {
 
 /* ============================================================
    PERSONAJE / AVATAR
-   Aparece a la derecha del cuadro de texto, anclado al mismo
-   borde inferior, extendiéndose hacia arriba.
+   Aparece a la derecha del brand-header, alineado horizontalmente.
+   z-index bajo para que esté "al fondo" y pueda ser tapado.
    --char-height: ajusta el tamaño del personaje.
    ============================================================ */
 :root {
@@ -229,17 +249,16 @@ body {
 }
 
 #character-wrapper {
-    /* right se calcula dinámicamente en JS (min(200px, 25% del ancho del overlay)) */
-    position: absolute;
-    right: 0;
-    bottom: 0;
+    position: relative;
     height: var(--char-height);
-    width: auto;
-    display: flex;
-    align-items: flex-end;
-    z-index: 1;           /* detrás del overlay-wrapper (z-index 2) */
+    width: 200px;          /* ancho fijo para el personaje */
+    display: block;
+    z-index: 0;           /* z-index mínimo: detrás de todo */
     transform-origin: bottom center;
     transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+    flex-shrink: 0;       /* no se encoge */
+    margin-left: auto;    /* se empuja a la derecha */
 }
 
 #character-wrapper.char-hidden {
@@ -247,7 +266,7 @@ body {
     pointer-events: none;
 }
 #character-wrapper.char-show {
-    transform: translateY(-107px);  /* 30% de char-height más arriba */
+    transform: translateY(0px);  /* 30% de char-height más arriba */
 }
 #character-wrapper.char-hiding {
     transform: translateY(calc(var(--char-height) + 40px));
@@ -258,9 +277,10 @@ body {
 .char-img {
     position: absolute;
     bottom: 0;
-    left: 0;
+    right: 0;
     height: var(--char-height);
     width: auto;
+    max-width: none;
     object-fit: contain;
     opacity: 0;
     transition: none;               /* cambio instantáneo, sin crossfade */
