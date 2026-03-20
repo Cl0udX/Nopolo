@@ -293,3 +293,18 @@ body {
     opacity: 1;
 }
 
+/* ============================================================
+   MODO SIN CHARACTER — Colapsa el espacio cuando no hay avatar
+   ============================================================ */
+/* Cuando no hay character activo, reducimos el espacio reservado */
+#character-wrapper.character-inactive {
+    height: 0;
+    width: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    flex: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+

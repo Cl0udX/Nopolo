@@ -1,5 +1,5 @@
 {
-  "audio_output_device": 6,
+  "audio_output_device": 10,
   "text_filter": {
     "remove_unicode_emoji": true,
     "remove_twitch_emotes": true,

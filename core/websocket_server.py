@@ -45,10 +45,10 @@ class WebSocketServer:
             await self.runner.setup()
             site = web.TCPSite(self.runner, self.host, self.port)
             await site.start()
-            logger.info(f"✅ WebSocket server iniciado en ws://{self.host}:{self.port}")
-            logger.info(f"📺 Overlay disponible en http://localhost:{self.port}/overlay")
+            logger.info(f"WebSocket server iniciado en ws://{self.host}:{self.port}")
+            logger.info(f"Overlay disponible en http://localhost:{self.port}/overlay")
         except Exception as e:
-            logger.error(f"❌ Error al iniciar WebSocket server: {e}")
+            logger.error(f"Error al iniciar WebSocket server: {e}")
             raise
     
     async def stop(self):
@@ -62,9 +62,77 @@ class WebSocketServer:
             # Detener el servidor
             if self.runner:
                 await self.runner.cleanup()
-            logger.info("🛑 WebSocket server detenido")
+            logger.info(f"WebSocket server detenido")
         except Exception as e:
-            logger.error(f"❌ Error al detener WebSocket server: {e}")
+            logger.error(f"Error al detener WebSocket server: {e}")
+    
+    def _get_voices_with_avatar(self) -> list:
+        """
+        Obtiene la lista de voces que tienen avatar configurado.
+        Retorna lista de nombres de voces con avatar.
+        """
+        voices_with_avatar = []
+        try:
+            from core.voice_manager import VoiceManager
+            vm = VoiceManager()
+            for voice_id, profile in vm.profiles.items():
+                if profile.rvc_config and (profile.rvc_config.image_idle or profile.rvc_config.image_talking):
+                    voices_with_avatar.append(profile.display_name)
+        except Exception as e:
+            logger.error(f"Error obtener voces con avatar: {e}")
+        return voices_with_avatar
+    
+    def _check_message_has_avatar(self, text: str, voice: str, is_nopolo: bool) -> bool:
+        """
+        Verifica si el mensaje actual contiene al menos una voz con avatar.
+        
+        Args:
+            text: Texto del mensaje
+            voice: Voz actual (si es modo normal)
+            is_nopolo: True si es modo multi-voz
+        
+        Returns:
+            True si al menos una voz que va a hablar en este mensaje tiene avatar
+        """
+        try:
+            from core.voice_manager import VoiceManager
+            import re
+            vm = VoiceManager()
+            
+            # Crear mapeo CASE-INSENSITIVE de display_name -> profile
+            voice_map = {p.display_name.lower(): p for p in vm.profiles.values()}
+            
+            if is_nopolo:
+                # Modo multi-voz: extraer todas las voces del texto
+                # Patrón: "voz:" o "voz.acento:"
+                voice_pattern = r'(\w+(?:\.\w+)?)\s*:'
+                mentioned_voices = set(re.findall(voice_pattern, text))
+                
+                for voice_name in mentioned_voices:
+                    voice_name_lower = voice_name.lower()
+                    profile = voice_map.get(voice_name_lower)
+                    has_avatar = bool(profile and profile.rvc_config and (
+                        profile.rvc_config.image_idle or profile.rvc_config.image_talking
+                    ))
+                    if has_avatar:
+                        return True
+            else:
+                # Modo normal: verificar solo la voz actual (case-insensitive)
+                voice_lower = voice.lower()
+                profile = voice_map.get(voice_lower)
+                has_avatar = bool(profile and profile.rvc_config and (
+                    profile.rvc_config.image_idle or profile.rvc_config.image_talking
+                ))
+                if has_avatar:
+                    logger.info(f"Mensaje con avatar (voz '{voice}' tiene avatar)")
+                    return True
+            logger.info(f"Mensaje SIN avatar detectado")
+            return False
+        except Exception as e:
+            logger.error(f"Error checking message avatar: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
     
     async def websocket_handler(self, request):
         """Maneja las conexiones WebSocket"""
@@ -72,7 +140,17 @@ class WebSocketServer:
         await ws.prepare(request)
         
         self.clients.add(ws)
-        logger.info(f"🔌 Cliente conectado. Total: {len(self.clients)}")
+        logger.info(f"Cliente conectado. Total: {len(self.clients)}")
+        
+        # Enviar lista de voces con avatar al conectarse
+        try:
+            voices_with_avatar = self._get_voices_with_avatar()
+            await ws.send_json({
+                'type': 'voices_config',
+                'voices_with_avatar': voices_with_avatar
+            })
+        except Exception as e:
+            logger.error(f"Error enviando configuración de voces: {e}")
         
         # Enviar estado actual si está hablando
         if self.is_speaking:
@@ -105,7 +183,7 @@ class WebSocketServer:
             logger.error(f"Error en WebSocket handler: {e}")
         finally:
             self.clients.discard(ws)
-            logger.info(f"🔌 Cliente desconectado. Total: {len(self.clients)}")
+            logger.info(f"Cliente desconectado. Total: {len(self.clients)}")
             try:
                 await ws.close()
             except:
@@ -140,11 +218,14 @@ class WebSocketServer:
         self.current_voice = voice
         self.is_speaking = True
 
+        has_avatar = self._check_message_has_avatar(text, voice, is_nopolo)
+
         message = {
             'type': 'tts_start',
             'text': text,
             'voice': voice,
             'is_nopolo': is_nopolo,
+            'has_voice_with_avatar': has_avatar,
         }
         if image_idle_b64:
             message['image_idle'] = image_idle_b64

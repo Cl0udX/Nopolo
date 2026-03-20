@@ -55,13 +55,14 @@
         const container  = document.getElementById('overlay-wrapper');
         const textContent= document.getElementById('text-content');
         
-        // ── Estado WebSocket ────────────────────────────────────────────────
         let ws                = null;
         let reconnectTimeout  = null;
         let pingInterval      = null;
         let hideTimeout       = null;
         let isConnecting      = false;
         let reconnectAttempts = 0;
+        let voicesWithAvatar  = [];
+        let currentMessageHasAvatar = false;
 
         function connect() {
             if (isConnecting) return;
@@ -80,7 +81,6 @@
                 ws = new WebSocket(`ws://localhost:${wsPort}/ws`);
 
                 ws.onopen = () => {
-                    console.log('✅ Conectado a Nopolo TTS');
                     isConnecting = false;
                     reconnectAttempts = 0;
                     pingInterval = setInterval(() => {
@@ -103,7 +103,6 @@
                     if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
                     reconnectAttempts++;
                     const delay = Math.min(3000 * Math.pow(2, reconnectAttempts - 1), 30000);
-                    console.log(`⏰ Reconectando en ${delay/1000}s…`);
                     reconnectTimeout = setTimeout(() => { reconnectTimeout = null; connect(); }, delay);
                 };
 
@@ -121,8 +120,17 @@
 
         // ── Manejo de mensajes ──────────────────────────────────────────────
         function handleMessage(data) {
-            if (data.type === 'tts_start') {
+            if (data.type === 'voices_config') {
+                // Procesar lista de voces con avatar al conectarse (legacy)
+                voicesWithAvatar = data.voices_with_avatar || [];
+            } else if (data.type === 'tts_start') {
                 if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+                currentMessageHasAvatar = data.has_voice_with_avatar || false;
+                charWrapper.classList.remove('character-inactive');
+                if (!currentMessageHasAvatar) {
+                    charWrapper.classList.add('character-inactive');
+                }
+                
                 showTTS(data.text, data.voice, data.is_nopolo || false);
                 if (data.image_idle || data.image_talking) {
                     showCharacter(data.voice || '', data.image_idle || '', data.image_talking || '');
@@ -131,7 +139,7 @@
                 }
             } else if (data.type === 'tts_stop') {
                 hideTTS();
-                hideCharacter();
+                hideCharacterAndCollapse();
             } else if (data.type === 'avatar_frame') {
                 setCharacterTalking(data.talking);
             } else if (data.type === 'avatar_change') {
@@ -181,6 +189,9 @@
             if (charHideTimeout)    { clearTimeout(charHideTimeout);    charHideTimeout    = null; }
             if (charCrossfadeTimer) { clearTimeout(charCrossfadeTimer); charCrossfadeTimer = null; }
 
+            // Remover la clase que colapsa el espacio cuando hay character
+            charWrapper.classList.remove('character-inactive');
+
             // El personaje está posicionado con right: 0 dentro de brand-area
             // No necesitamos calcular posición dinámica
 
@@ -229,6 +240,24 @@
             }, 500);
         }
 
+        function hideCharacterAndCollapse() {
+            charWrapper.classList.remove('char-show');
+            charWrapper.classList.add('char-hiding');
+            const willCollapse = !currentMessageHasAvatar;
+            
+            charWrapper.classList.remove('character-inactive');
+            if (willCollapse) {
+                charWrapper.classList.add('character-inactive');
+            }
+            charHideTimeout = setTimeout(() => {
+                charWrapper.classList.remove('char-hiding');
+                charWrapper.classList.add('char-hidden');
+                charIdle.src    = '';
+                charTalking.src = '';
+                charHideTimeout = null;
+            }, 500);
+        }
+
         function setCharacterTalking(talking) {
             if (talking) {
                 charIdle.classList.remove('char-active');
@@ -255,8 +284,6 @@
         }
 
         connect();
-        console.log('🎙️ Nopolo TTS Overlay — PostInCloud');
-        console.log(`🔌 WebSocket: ws://localhost:${wsPort}/ws`);
     </script>
 </body>
 </html>
