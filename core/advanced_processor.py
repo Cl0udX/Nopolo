@@ -356,18 +356,24 @@ class AdvancedAudioProcessor:
                         profile = None
                         if segment.voice:       # ← atributo correcto del MessageSegment
                             try:
-                                profile = self.voice_manager.get_profile(segment.voice)
+                                profile = self.voice_manager.get_profile_by_name_or_id(segment.voice)
                             except Exception:
                                 pass
                         # Pre-calcular peaks para este chunk
                         peaks = self._compute_avatar_peaks(chunk, target_sr)
-                        avatar_timeline.append({
+                        avatar_entry = {
                             'start_sec': current_sample / target_sr,
                             'end_sec':   end_sample / target_sr,
                             'profile':   profile,
                             'peaks':     peaks,
                             'is_sound':  False,
-                        })
+                        }
+                        # Agregar campos desglosados para compatibilidad con rest_server.py
+                        if profile:
+                            avatar_entry['display_name'] = profile.display_name
+                            avatar_entry['image_idle'] = profile.rvc_config.image_idle if profile.rvc_config else None
+                            avatar_entry['image_talking'] = profile.rvc_config.image_talking if profile.rvc_config else None
+                        avatar_timeline.append(avatar_entry)
                     elif return_timeline and segment.type == SegmentType.SOUND:
                         avatar_timeline.append({
                             'start_sec': current_sample / target_sr,
