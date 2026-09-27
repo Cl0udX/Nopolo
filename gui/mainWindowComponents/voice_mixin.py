@@ -64,8 +64,10 @@ class VoiceMixin:
         
         self.voice_info.setText(" | ".join(info_parts))
         
-        # Actualizar engine TTS
-        self.tts_engine.update_config(profile.tts_config)
+        # Actualizar engine TTS. user_initiated=True: el usuario eligió esta
+        # voz explícitamente, así que reintenta el provider configurado
+        # aunque estuviera degradado a Edge TTS por fallos repetidos.
+        self.tts_engine.update_config(profile.tts_config, user_initiated=True)
         
         # Cargar modelo RVC si es necesario
         if profile.is_transformer_voice():

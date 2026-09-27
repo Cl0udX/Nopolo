@@ -659,11 +659,13 @@ class VoiceConfigDialog(QDialog):
             if not self.temp_tts_engine:
                 self.temp_tts_engine = TTSEngine(tts_config)
             else:
-                self.temp_tts_engine.update_config(tts_config)
-            
+                # user_initiated=True: es un test manual, siempre reintenta
+                # el provider elegido aunque estuviera degradado.
+                self.temp_tts_engine.update_config(tts_config, user_initiated=True)
+
             # Sintetizar
             wav_path = self.temp_tts_engine.synthesize(text)
-            
+
             # Reproducir
             import scipy.io.wavfile as wavfile
             rate, data = wavfile.read(wav_path)
@@ -694,8 +696,10 @@ class VoiceConfigDialog(QDialog):
             if not self.temp_tts_engine:
                 self.temp_tts_engine = TTSEngine(tts_config)
             else:
-                self.temp_tts_engine.update_config(tts_config)
-            
+                # user_initiated=True: es un test manual, siempre reintenta
+                # el provider elegido aunque estuviera degradado.
+                self.temp_tts_engine.update_config(tts_config, user_initiated=True)
+
             wav_path = self.temp_tts_engine.synthesize(text)
             
             # RVC

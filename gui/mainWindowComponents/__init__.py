@@ -15,6 +15,7 @@ from .controls_mixin import ControlsMixin
 from .system_config_mixin import SystemConfigMixin
 from .overlay_mixin import OverlayMixin
 from .update_mixin import UpdateMixin
+from .tts_reload_mixin import TTSHotReloadMixin
 
 __all__ = [
     'ConsoleRedirector',
@@ -30,5 +31,6 @@ __all__ = [
     'SystemConfigMixin',
     'OverlayMixin',
     'UpdateMixin',
+    'TTSHotReloadMixin',
 ]
 

@@ -132,7 +132,18 @@ class UIBuilderMixin:
         self.reload_voices_btn.setToolTip("Recargar voces desde archivo")
         self.reload_voices_btn.clicked.connect(self._reload_voices)
         voice_layout.addWidget(self.reload_voices_btn)
-        
+
+        # Botón para recargar el motor TTS en caliente (solo modo dev)
+        from core.paths import get_run_mode
+        if get_run_mode() == "dev":
+            self.reload_tts_engine_btn = QPushButton("🧪")
+            self.reload_tts_engine_btn.setMaximumWidth(40)
+            self.reload_tts_engine_btn.setToolTip(
+                "Recargar motor TTS (solo dev, sin reiniciar la app)"
+            )
+            self.reload_tts_engine_btn.clicked.connect(self._reload_tts_engine_hot)
+            voice_layout.addWidget(self.reload_tts_engine_btn)
+
         voice_group.setLayout(voice_layout)
         center_panel.addWidget(voice_group)
         
