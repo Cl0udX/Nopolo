@@ -42,6 +42,17 @@ public class CPHInline
                 return false;
             }
 
+            // Streamer.bot a veces entrega rawInput con el comando incluido
+            // (ej. "!tts hola" en vez de solo "hola"). Lo quitamos si está,
+            // así el TTS nunca lee el "!tts" en voz alta.
+            mensaje = QuitarComando(mensaje, "!tts");
+
+            if (string.IsNullOrWhiteSpace(mensaje))
+            {
+                CPH.LogWarn("⚠️ [TTS Simple] Mensaje vacío después de quitar el comando");
+                return false;
+            }
+
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             // PASO 2: Preparar el mensaje para enviarlo
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -75,6 +86,20 @@ public class CPHInline
     // FUNCIONES AUXILIARES (No es necesario modificar nada aquí)
     // ═══════════════════════════════════════════════════════════════════════
     
+    /// <summary>
+    /// Si el texto empieza con el comando (ej. "!tts"), lo quita y devuelve
+    /// el resto sin espacios al inicio. Si no empieza con el comando, lo
+    /// devuelve tal cual (por si rawInput ya viene sin el comando).
+    /// </summary>
+    private string QuitarComando(string texto, string comando)
+    {
+        if (texto.StartsWith(comando, StringComparison.OrdinalIgnoreCase))
+        {
+            texto = texto.Substring(comando.Length);
+        }
+        return texto.TrimStart();
+    }
+
     /// <summary>
     /// Convierte el texto a un formato seguro para JSON
     /// (Reemplaza comillas y caracteres especiales)

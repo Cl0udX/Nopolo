@@ -52,6 +52,16 @@ hiddenimports += collect_submodules('PySide6')
 hiddenimports += collect_submodules('fastapi')
 hiddenimports += collect_submodules('uvicorn')
 hiddenimports += collect_submodules('torch')
+# torchfcpe (método F0 "fcpe" de RVC) y su cadena de dependencias, ninguna
+# detectada por PyInstaller porque solo se importan dinámicamente dentro de
+# una función (rvc/rvc/modules/vc/pipeline.py), nunca en un import de nivel
+# superior en el código propio: torchfcpe -> einops + local_attention;
+# local_attention -> einops + hyper_connections; hyper_connections -> einops.
+# Todas son puro Python, sin binarios que compilar.
+hiddenimports += collect_submodules('torchfcpe')
+hiddenimports += collect_submodules('einops')
+hiddenimports += collect_submodules('local_attention')
+hiddenimports += collect_submodules('hyper_connections')
 
 # Incluir todos los submódulos de fairseq y sus dependencias
 hiddenimports += collect_submodules('fairseq')
@@ -92,6 +102,12 @@ datas.append((fairseq_path, 'fairseq'))
 # Datos adicionales a incluir
 datas += collect_data_files('edge_tts')
 datas += collect_data_files('librosa')
+# torchfcpe: método F0 "fcpe" de RVC. Se importa dinámicamente dentro de una
+# función (rvc/rvc/modules/vc/pipeline.py) por lo que PyInstaller no lo
+# detecta solo -- sin esto, "ModuleNotFoundError: No module named 'torchfcpe'"
+# al usar una voz configurada con Método F0 = fcpe. También trae un modelo
+# (.pt) que hay que incluir como dato, no como módulo.
+datas += collect_data_files('torchfcpe')
 
 # FUNCIÓN CORREGIDA para copiar carpetas
 def copytree_for_bundle(src, dst):
