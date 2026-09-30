@@ -66,15 +66,19 @@ public class CPHInline
                         ? "🎙️ Voces disponibles: " + listaVoces
                         : "🎙️ No hay voces configuradas";
 
-                    // En vez de mandar el mensaje directo desde el C# (que
-                    // depende de que CPH.SendMessage sepa a qué plataforma
-                    // responder), lo guardamos en una Global Variable de
-                    // Streamer.bot (aparece en Variables > Global). Después,
-                    // en cualquier Action, agrega una sub-acción nativa
-                    // "Send Message" (Twitch o YouTube) y en su campo de
-                    // mensaje escribe: %voces%
-                    CPH.SetGlobalVar("voces", mensajeChat, false);
-                    CPH.LogInfo("[Listar Voces] Global Variable 'voces' guardada: " + mensajeChat);
+                    // Mandarlo directo desde el C#, probando primero con la
+                    // cuenta del streamer (false) y, si esa falla, con la
+                    // cuenta de Bot (true). Logueamos el resultado real de
+                    // cada intento para saber cuál funciona -- ya no depende
+                    // de ninguna sub-acción ni variable externa.
+                    bool enviado = CPH.SendMessage(mensajeChat, false);
+                    CPH.LogInfo("[Listar Voces] SendMessage(bot=false) devolvió: " + enviado);
+
+                    if (!enviado)
+                    {
+                        enviado = CPH.SendMessage(mensajeChat, true);
+                        CPH.LogInfo("[Listar Voces] SendMessage(bot=true) devolvió: " + enviado);
+                    }
                 }
                 return true;
             }
