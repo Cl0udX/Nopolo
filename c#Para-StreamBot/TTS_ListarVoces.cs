@@ -62,14 +62,19 @@ public class CPHInline
                     // y mandarlos al chat.
                     string listaVoces = ExtraerNombresVoces(json);
 
-                    if (!string.IsNullOrEmpty(listaVoces))
-                    {
-                        CPH.SendMessage("🎙️ Voces disponibles: " + listaVoces, true);
-                    }
-                    else
-                    {
-                        CPH.SendMessage("🎙️ No hay voces configuradas", true);
-                    }
+                    string mensajeChat = !string.IsNullOrEmpty(listaVoces)
+                        ? "🎙️ Voces disponibles: " + listaVoces
+                        : "🎙️ No hay voces configuradas";
+
+                    // En vez de mandar el mensaje directo desde el C# (que
+                    // depende de que CPH.SendMessage sepa a qué plataforma
+                    // responder), lo guardamos en una variable de
+                    // Streamer.bot. Después, en la Action, agrega una
+                    // sub-acción nativa "Send Message" (Twitch o YouTube)
+                    // justo debajo de este "Execute C# Code" y en su campo
+                    // de mensaje escribe: %voces%
+                    CPH.SetArgument("voces", mensajeChat);
+                    CPH.LogInfo("[Listar Voces] Variable 'voces' guardada: " + mensajeChat);
                 }
                 return true;
             }
