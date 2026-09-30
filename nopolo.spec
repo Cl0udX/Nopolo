@@ -301,7 +301,19 @@ a = Analysis(
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
-    noarchive=False,
+    # noarchive=True: NO comprimir los módulos puros de Python (pydub,
+    # torch, edge_tts, etc.) dentro del archivo PYZ embebido en el .exe --
+    # dejarlos como archivos .pyc sueltos en _internal/. Esto es necesario
+    # para que el pyworker/python.exe (ver más arriba y
+    # core/rvc_subprocess_persistent.py) -- un intérprete Python real y
+    # SEPARADO que se lanza como subprocess para RVC/multi-voz -- pueda
+    # importarlos con su mecanismo normal de import. Un PYZ comprimido solo
+    # lo sabe leer el bootloader propio de PyInstaller dentro del .exe
+    # principal; el pyworker no tiene forma de acceder a eso, solo puede
+    # importar archivos reales en disco (por eso core/gui/rvc SÍ
+    # funcionaban ya -- se copian como archivos sueltos vía datas -- pero
+    # pydub/torch/etc. fallaban con ModuleNotFoundError).
+    noarchive=True,
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
