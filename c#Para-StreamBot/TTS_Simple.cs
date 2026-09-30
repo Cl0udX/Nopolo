@@ -4,13 +4,21 @@
 // 
 // ¿QUÉ HACE?
 // ----------
-// Envía texto al TTS de Nopolo con la voz por defecto.
-// 
+// Envía texto al TTS de Nopolo con la voz por defecto (o con una voz fija
+// que tú elijas -- ver la constante VOZ_ID más abajo en el código).
+//
 // CÓMO USAR:
 // ----------
 // 1. Crear comando en Streamer.bot: !tts
 // 2. El usuario escribe: !tts Hola, esto es una prueba
 // 3. Nopolo reproduce el mensaje con la voz por defecto
+//
+// CAMBIAR LA VOZ:
+// ---------------
+// Busca "private const string VOZ_ID" al inicio de la clase y pon ahí el
+// id de la voz que quieras (el mismo que ves con el comando !voces, ej.
+// "homero", "dross", "base_male"). Déjalo vacío ("") para usar la voz por
+// defecto configurada en Nopolo.
 //
 // CONFIGURACIÓN:
 // --------------
@@ -29,6 +37,12 @@ using System.Text;
 
 public class CPHInline
 {
+    // ID de la voz a usar (el mismo id que ves con el comando !voces, ej.
+    // "homero", "dross", "base_male"). Déjalo vacío ("") para usar la voz
+    // por defecto configurada en Nopolo -- cambia solo esta línea para
+    // que este comando siempre hable con otra voz.
+    private const string VOZ_ID = "";
+
     public bool Execute()
     {
         try
@@ -57,7 +71,9 @@ public class CPHInline
             // PASO 2: Preparar el mensaje para enviarlo
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             string mensajeSeguro = PrepararMensajeParaJSON(mensaje);
-            string json = "{\"text\":\"" + mensajeSeguro + "\"}";
+            string json = string.IsNullOrEmpty(VOZ_ID)
+                ? "{\"text\":\"" + mensajeSeguro + "\"}"
+                : "{\"text\":\"" + mensajeSeguro + "\",\"voice_id\":\"" + VOZ_ID + "\"}";
 
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             // PASO 3: Enviar al servidor de Nopolo
