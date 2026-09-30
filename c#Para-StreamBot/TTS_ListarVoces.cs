@@ -66,19 +66,11 @@ public class CPHInline
                         ? "🎙️ Voces disponibles: " + listaVoces
                         : "🎙️ No hay voces configuradas";
 
-                    // Mandarlo directo desde el C#, probando primero con la
-                    // cuenta del streamer (false) y, si esa falla, con la
-                    // cuenta de Bot (true). Logueamos el resultado real de
-                    // cada intento para saber cuál funciona -- ya no depende
-                    // de ninguna sub-acción ni variable externa.
-                    bool enviado = CPH.SendMessage(mensajeChat, false);
-                    CPH.LogInfo("[Listar Voces] SendMessage(bot=false) devolvió: " + enviado);
-
-                    if (!enviado)
-                    {
-                        enviado = CPH.SendMessage(mensajeChat, true);
-                        CPH.LogInfo("[Listar Voces] SendMessage(bot=true) devolvió: " + enviado);
-                    }
+                    // Mandarlo directo desde el C#. En esta versión de
+                    // Streamer.bot, SendMessage no devuelve nada (void), así
+                    // que no podemos leer si tuvo éxito -- solo lo llamamos.
+                    CPH.LogInfo("[Listar Voces] Enviando al chat: " + mensajeChat);
+                    CPH.SendMessage(mensajeChat, false);
                 }
                 return true;
             }
