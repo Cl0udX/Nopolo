@@ -266,18 +266,24 @@ os.environ["index_root"]  = os.path.join(base_dir, "voices")
 os.environ["weight_root"] = os.path.join(base_dir, "voices")
 
 # numba (usado por librosa, a su vez usado por torchfcpe -- método F0
-# "fcpe" de RVC) intenta guardar caché de compilación JIT basándose en la
-# ubicación en disco del archivo fuente. En un bundle empaquetado (_internal/)
-# no puede determinar esa ubicación de forma normal y falla con:
-#   RuntimeError: cannot cache function '...': no locator available for file '...'
-# Fijar NUMBA_CACHE_DIR a una carpeta real y escribible evita que intente
-# derivar la ubicación por su cuenta. Debe fijarse ANTES de que numba/
-# librosa se importen (por eso va aquí, antes del bloque de imports pesados
-# más abajo).
-import tempfile as _tempfile_w
-_numba_cache_dir = os.path.join(_tempfile_w.gettempdir(), "nopolo_numba_cache")
-os.makedirs(_numba_cache_dir, exist_ok=True)
-os.environ.setdefault("NUMBA_CACHE_DIR", _numba_cache_dir)
+# "fcpe" de RVC) intenta guardar caché de compilación JIT y para eso pide un
+# "locator" que sepa dónde guardarla. Con noarchive=True los módulos quedan
+# como .pyc sueltos (no .py), y el locator que numba prueba primero
+# (UserProvidedCacheLocator, activado por NUMBA_CACHE_DIR) exige de todos
+# modos que el archivo "exista" en disco con ese nombre exacto -- cosa que
+# un .pyc no cumple, así que ese locator NUNCA sirve aquí (confirmado
+# leyendo el código fuente de numba: numba/core/caching.py,
+# _SourceFileBackedLocatorMixin.from_function no tiene alternativa para
+# procesos "frozen"). El locator que SÍ tiene ese atajo es
+# UserWideCacheLocator (numba/core/caching.py): acepta con
+# "os.path.exists(...) OR sys.frozen" -- y sys.frozen es justo lo que le
+# falta a este subprocess (un python.exe normal, no el .exe compilado). Por
+# eso lo activamos a mano, igual que si fuera realmente un ejecutable
+# congelado con PyInstaller. Verificado end-to-end contra el código de
+# numba antes de aplicarlo (no es una corazonada).
+if not hasattr(sys, "frozen"):
+    sys.frozen = True
+
 os.environ["hubert_path"] = os.path.join(base_dir, "models", "hubert_base.pt")
 os.environ["rmvpe_root"]  = os.path.join(base_dir, "models")
 
