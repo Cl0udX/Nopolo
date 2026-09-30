@@ -264,6 +264,20 @@ os.chdir(base_dir)
 
 os.environ["index_root"]  = os.path.join(base_dir, "voices")
 os.environ["weight_root"] = os.path.join(base_dir, "voices")
+
+# numba (usado por librosa, a su vez usado por torchfcpe -- método F0
+# "fcpe" de RVC) intenta guardar caché de compilación JIT basándose en la
+# ubicación en disco del archivo fuente. En un bundle empaquetado (_internal/)
+# no puede determinar esa ubicación de forma normal y falla con:
+#   RuntimeError: cannot cache function '...': no locator available for file '...'
+# Fijar NUMBA_CACHE_DIR a una carpeta real y escribible evita que intente
+# derivar la ubicación por su cuenta. Debe fijarse ANTES de que numba/
+# librosa se importen (por eso va aquí, antes del bloque de imports pesados
+# más abajo).
+import tempfile as _tempfile_w
+_numba_cache_dir = os.path.join(_tempfile_w.gettempdir(), "nopolo_numba_cache")
+os.makedirs(_numba_cache_dir, exist_ok=True)
+os.environ.setdefault("NUMBA_CACHE_DIR", _numba_cache_dir)
 os.environ["hubert_path"] = os.path.join(base_dir, "models", "hubert_base.pt")
 os.environ["rmvpe_root"]  = os.path.join(base_dir, "models")
 

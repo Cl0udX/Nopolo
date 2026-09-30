@@ -11,6 +11,20 @@ if sys.platform == 'win32':
     multiprocessing.freeze_support()
 
 # ============================================================
+# numba (usado por librosa -> torchfcpe, método F0 "fcpe" de RVC) intenta
+# cachear funciones JIT basándose en la ubicación en disco del archivo
+# fuente. En un build empaquetado eso puede fallar con:
+#   RuntimeError: cannot cache function '...': no locator available for file '...'
+# Fijar NUMBA_CACHE_DIR a una carpeta real evita que numba intente derivar
+# la ubicación por su cuenta. Debe ir antes de cualquier import que pueda
+# jalar numba/librosa transitivamente (por eso va aquí, arriba de todo).
+# Ver también core/rvc_subprocess_persistent.py (mismo fix para el worker).
+import tempfile as _tempfile_main
+_numba_cache_dir = os.path.join(_tempfile_main.gettempdir(), "nopolo_numba_cache")
+os.makedirs(_numba_cache_dir, exist_ok=True)
+os.environ.setdefault("NUMBA_CACHE_DIR", _numba_cache_dir)
+
+# ============================================================
 # DIAGNÓSTICO: Activar faulthandler para capturar crashes
 # ============================================================
 import faulthandler
