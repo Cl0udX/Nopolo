@@ -28,8 +28,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 using System;
+using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 
 public class CPHInline
 {
@@ -52,12 +54,22 @@ public class CPHInline
                 if (inicioCuerpo > 0)
                 {
                     string json = respuesta.Substring(inicioCuerpo + 4);
-                    
+
                     CPH.LogInfo("✅ [Listar Voces] Voces disponibles:");
                     CPH.LogInfo(json);
-                    
-                    // Opcional: Enviar mensaje al chat
-                    CPH.SendMessage("🎙️ Consulta los logs para ver las voces disponibles", true);
+
+                    // Sacar los profile_id del JSON (sin librería, con regex)
+                    // y mandarlos al chat.
+                    string listaVoces = ExtraerNombresVoces(json);
+
+                    if (!string.IsNullOrEmpty(listaVoces))
+                    {
+                        CPH.SendMessage("🎙️ Voces disponibles: " + listaVoces, true);
+                    }
+                    else
+                    {
+                        CPH.SendMessage("🎙️ No hay voces configuradas", true);
+                    }
                 }
                 return true;
             }
@@ -78,7 +90,29 @@ public class CPHInline
     // ═══════════════════════════════════════════════════════════════════════
     // FUNCIONES AUXILIARES (No es necesario modificar nada aquí)
     // ═══════════════════════════════════════════════════════════════════════
-    
+
+    /// <summary>
+    /// Saca los "profile_id" del JSON que devuelve /api/voices y los junta
+    /// separados por coma, sin necesitar una librería de JSON.
+    /// Ejemplo: [{"profile_id":"homero",...},{"profile_id":"dross",...}]
+    ///          → "homero, dross"
+    /// Nota: /api/voices devuelve TODAS las voces configuradas, incluidas
+    /// las deshabilitadas -- si quieres ocultar esas, avísame y le agrego
+    /// el filtro por "enabled":true.
+    /// </summary>
+    private string ExtraerNombresVoces(string json)
+    {
+        var nombres = new List<string>();
+        var regex = new Regex("\"profile_id\"\\s*:\\s*\"([^\"]+)\"");
+
+        foreach (Match match in regex.Matches(json))
+        {
+            nombres.Add(match.Groups[1].Value);
+        }
+
+        return string.Join(", ", nombres);
+    }
+
     /// <summary>
     /// Consulta al servidor de Nopolo para obtener la lista de voces
     /// </summary>
