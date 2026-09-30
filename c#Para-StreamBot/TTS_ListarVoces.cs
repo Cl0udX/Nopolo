@@ -28,8 +28,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 using System;
+using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 
 public class CPHInline
 {
@@ -52,12 +54,35 @@ public class CPHInline
                 if (inicioCuerpo > 0)
                 {
                     string json = respuesta.Substring(inicioCuerpo + 4);
-                    
+
                     CPH.LogInfo("✅ [Listar Voces] Voces disponibles:");
                     CPH.LogInfo(json);
-                    
-                    // Opcional: Enviar mensaje al chat
-                    CPH.SendMessage("🎙️ Consulta los logs para ver las voces disponibles", true);
+
+                    // Sacar los profile_id del JSON (sin librería, con regex)
+                    // y mandarlos al chat.
+                    string listaVoces = ExtraerNombresVoces(json);
+
+                    string mensajeChat = !string.IsNullOrEmpty(listaVoces)
+                        ? "🎙️ Voces disponibles: " + listaVoces
+                        : "🎙️ No hay voces configuradas";
+
+                    // CPH.SendMessage (Twitch) y CPH.SendYouTubeMessage no
+                    // detectan solos la plataforma de origen del comando.
+                    // "commandSource" sí la trae ("twitch" o "youtube"),
+                    // así que mandamos el mensaje SOLO por esa plataforma.
+                    CPH.TryGetArg("commandSource", out string commandSource);
+                    commandSource = (commandSource ?? "").ToLowerInvariant();
+
+                    CPH.LogInfo("[Listar Voces] Enviando al chat (" + commandSource + "): " + mensajeChat);
+
+                    if (commandSource == "youtube")
+                    {
+                        CPH.SendYouTubeMessage(mensajeChat, false);
+                    }
+                    else
+                    {
+                        CPH.SendMessage(mensajeChat, false);
+                    }
                 }
                 return true;
             }
@@ -78,7 +103,29 @@ public class CPHInline
     // ═══════════════════════════════════════════════════════════════════════
     // FUNCIONES AUXILIARES (No es necesario modificar nada aquí)
     // ═══════════════════════════════════════════════════════════════════════
-    
+
+    /// <summary>
+    /// Saca los "profile_id" del JSON que devuelve /api/voices y los junta
+    /// separados por coma, sin necesitar una librería de JSON.
+    /// Ejemplo: [{"profile_id":"homero",...},{"profile_id":"dross",...}]
+    ///          → "homero, dross"
+    /// Nota: /api/voices devuelve TODAS las voces configuradas, incluidas
+    /// las deshabilitadas -- si quieres ocultar esas, avísame y le agrego
+    /// el filtro por "enabled":true.
+    /// </summary>
+    private string ExtraerNombresVoces(string json)
+    {
+        var nombres = new List<string>();
+        var regex = new Regex("\"profile_id\"\\s*:\\s*\"([^\"]+)\"");
+
+        foreach (Match match in regex.Matches(json))
+        {
+            nombres.Add(match.Groups[1].Value);
+        }
+
+        return string.Join(", ", nombres);
+    }
+
     /// <summary>
     /// Consulta al servidor de Nopolo para obtener la lista de voces
     /// </summary>
@@ -112,10 +159,21 @@ public class CPHInline
                 stream.Write(datos, 0, datos.Length);
                 stream.Flush();
 
-                // Leer respuesta
-                byte[] buffer = new byte[8192];
-                int bytesLeidos = stream.Read(buffer, 0, buffer.Length);
-                return Encoding.UTF8.GetString(buffer, 0, bytesLeidos);
+                // Leer respuesta completa. Un solo stream.Read() puede
+                // devolver solo una parte si el body todavía no llegó del
+                // todo -- como mandamos "Connection: close", el servidor
+                // cierra la conexión cuando termina, así que leemos en
+                // bucle hasta que Read() devuelva 0 (EOF real).
+                using (var memoria = new System.IO.MemoryStream())
+                {
+                    byte[] buffer = new byte[8192];
+                    int bytesLeidos;
+                    while ((bytesLeidos = stream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        memoria.Write(buffer, 0, bytesLeidos);
+                    }
+                    return Encoding.UTF8.GetString(memoria.ToArray());
+                }
             }
         }
         catch (SocketException)

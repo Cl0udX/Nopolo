@@ -4,13 +4,21 @@
 // 
 // ¿QUÉ HACE?
 // ----------
-// Envía texto al TTS de Nopolo con la voz por defecto.
-// 
+// Envía texto al TTS de Nopolo con la voz por defecto (o con una voz fija
+// que tú elijas -- ver la constante VOZ_ID más abajo en el código).
+//
 // CÓMO USAR:
 // ----------
 // 1. Crear comando en Streamer.bot: !tts
 // 2. El usuario escribe: !tts Hola, esto es una prueba
 // 3. Nopolo reproduce el mensaje con la voz por defecto
+//
+// CAMBIAR LA VOZ:
+// ---------------
+// Busca "private const string VOZ_ID" al inicio de la clase y pon ahí el
+// id de la voz que quieras (el mismo que ves con el comando !voces, ej.
+// "homero", "dross", "base_male"). Déjalo vacío ("") para usar la voz por
+// defecto configurada en Nopolo.
 //
 // CONFIGURACIÓN:
 // --------------
@@ -29,6 +37,12 @@ using System.Text;
 
 public class CPHInline
 {
+    // ID de la voz a usar (el mismo id que ves con el comando !voces, ej.
+    // "homero", "dross", "base_male"). Déjalo vacío ("") para usar la voz
+    // por defecto configurada en Nopolo -- cambia solo esta línea para
+    // que este comando siempre hable con otra voz.
+    private const string VOZ_ID = "";
+
     public bool Execute()
     {
         try
@@ -42,11 +56,24 @@ public class CPHInline
                 return false;
             }
 
+            // Streamer.bot a veces entrega rawInput con el comando incluido
+            // (ej. "!tts hola" en vez de solo "hola"). Lo quitamos si está,
+            // así el TTS nunca lee el "!tts" en voz alta.
+            mensaje = QuitarComando(mensaje, "!tts");
+
+            if (string.IsNullOrWhiteSpace(mensaje))
+            {
+                CPH.LogWarn("⚠️ [TTS Simple] Mensaje vacío después de quitar el comando");
+                return false;
+            }
+
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             // PASO 2: Preparar el mensaje para enviarlo
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             string mensajeSeguro = PrepararMensajeParaJSON(mensaje);
-            string json = "{\"text\":\"" + mensajeSeguro + "\"}";
+            string json = string.IsNullOrEmpty(VOZ_ID)
+                ? "{\"text\":\"" + mensajeSeguro + "\"}"
+                : "{\"text\":\"" + mensajeSeguro + "\",\"voice_id\":\"" + VOZ_ID + "\"}";
 
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             // PASO 3: Enviar al servidor de Nopolo
@@ -75,6 +102,20 @@ public class CPHInline
     // FUNCIONES AUXILIARES (No es necesario modificar nada aquí)
     // ═══════════════════════════════════════════════════════════════════════
     
+    /// <summary>
+    /// Si el texto empieza con el comando (ej. "!tts"), lo quita y devuelve
+    /// el resto sin espacios al inicio. Si no empieza con el comando, lo
+    /// devuelve tal cual (por si rawInput ya viene sin el comando).
+    /// </summary>
+    private string QuitarComando(string texto, string comando)
+    {
+        if (texto.StartsWith(comando, StringComparison.OrdinalIgnoreCase))
+        {
+            texto = texto.Substring(comando.Length);
+        }
+        return texto.TrimStart();
+    }
+
     /// <summary>
     /// Convierte el texto a un formato seguro para JSON
     /// (Reemplaza comillas y caracteres especiales)

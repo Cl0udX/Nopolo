@@ -102,7 +102,12 @@ class ImportManagerMixin:
     
     def _add_sound_to_config(self, sound_id, name, filename, path):
         """Agrega un sonido al archivo de configuración"""
-        config_path = "config/sounds.json"
+        # Usar la MISMA ruta ya resuelta por SoundManager (core/paths.py),
+        # no una ruta relativa hardcodeada -- esa solo funciona por
+        # casualidad en modo dev (directorio de trabajo = raíz del repo);
+        # en el build empaquetado el archivo real vive en
+        # AppData/Roaming/Nopolo/config/, no en "config/" relativo al CWD.
+        config_path = str(self.sound_manager.config_file)
         
         # Cargar configuración actual
         if os.path.exists(config_path):
@@ -132,7 +137,10 @@ class ImportManagerMixin:
     
     def _add_background_to_config(self, bg_id, name, path, volume):
         """Agrega un fondo al archivo de configuración"""
-        config_path = "config/backgrounds.json"
+        # Misma razón que en _add_sound_to_config: usar la ruta ya resuelta
+        # por BackgroundManager (core/paths.py) en vez de una relativa
+        # hardcodeada que no existe en el build empaquetado.
+        config_path = self.background_manager.config_path
         
         # Cargar configuración actual
         if os.path.exists(config_path):

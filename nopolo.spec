@@ -52,6 +52,16 @@ hiddenimports += collect_submodules('PySide6')
 hiddenimports += collect_submodules('fastapi')
 hiddenimports += collect_submodules('uvicorn')
 hiddenimports += collect_submodules('torch')
+# torchfcpe (método F0 "fcpe" de RVC) y su cadena de dependencias, ninguna
+# detectada por PyInstaller porque solo se importan dinámicamente dentro de
+# una función (rvc/rvc/modules/vc/pipeline.py), nunca en un import de nivel
+# superior en el código propio: torchfcpe -> einops + local_attention;
+# local_attention -> einops + hyper_connections; hyper_connections -> einops.
+# Todas son puro Python, sin binarios que compilar.
+hiddenimports += collect_submodules('torchfcpe')
+hiddenimports += collect_submodules('einops')
+hiddenimports += collect_submodules('local_attention')
+hiddenimports += collect_submodules('hyper_connections')
 
 # Incluir todos los submódulos de fairseq y sus dependencias
 hiddenimports += collect_submodules('fairseq')
@@ -92,6 +102,12 @@ datas.append((fairseq_path, 'fairseq'))
 # Datos adicionales a incluir
 datas += collect_data_files('edge_tts')
 datas += collect_data_files('librosa')
+# torchfcpe: método F0 "fcpe" de RVC. Se importa dinámicamente dentro de una
+# función (rvc/rvc/modules/vc/pipeline.py) por lo que PyInstaller no lo
+# detecta solo -- sin esto, "ModuleNotFoundError: No module named 'torchfcpe'"
+# al usar una voz configurada con Método F0 = fcpe. También trae un modelo
+# (.pt) que hay que incluir como dato, no como módulo.
+datas += collect_data_files('torchfcpe')
 
 # FUNCIÓN CORREGIDA para copiar carpetas
 def copytree_for_bundle(src, dst):
@@ -172,21 +188,92 @@ for _ff_bin in ("ffprobe", "ffprobe.exe"):
         print(f"\nffprobe incluido en bundle: {_ff_path}")
         break
 
-# En Windows: incluir python.exe dentro de _internal/ para que el worker
-# subprocess use exactamente la misma versión que compiló el bundle.
-# Sin esto, si el usuario tiene Python 3.12 en el PATH se produce:
-#   ImportError: Module use of python310.dll conflicts with this version of Python
+# En Windows: incluir un Python STANDALONE dentro de _internal/pyworker/
+# para que el worker subprocess (RVC/multi-voz) tenga un intérprete que
+# funcione en una máquina limpia sin Python instalado.
+#
+# IMPORTANTE -- por qué NO alcanza con copiar solo python.exe:
+# shutil.which("python.exe") encuentra el .venv ACTIVADO (ej.
+# .venv\Scripts\python.exe), que es apenas un lanzador -- depende de un
+# pyvenv.cfg que apunta a la instalación real de Python (home=C:\PythonXXX)
+# para encontrar su Lib/ y DLLs/. Esa instalación real NO existe en la PC
+# del usuario final, así que ese python.exe copiado solo falla al arrancar
+# con "No pyvenv.cfg file" y el worker de RVC/multi-voz nunca funciona
+# (aunque el resto de la app sí, porque el modo normal no usa este
+# subprocess).
+#
+# La solución: usar sys.base_prefix (la instalación REAL de Python, no el
+# venv activado) y copiar el .exe + su DLL principal + Lib/ + DLLs/ juntos
+# a _internal/pyworker/. Con Lib/ y DLLs/ al lado del .exe, Python se
+# autodescubre por "landmark search" (busca Lib/os.py junto al ejecutable)
+# sin necesitar pyvenv.cfg -- exactamente como una distribución de Python
+# portable. Ver core/rvc_subprocess_persistent.py::_find_python_executable.
 #
 # En macOS: incluir python3 también — macOS moderno (Ventura+) NO viene con
 # Python3 instalado por defecto. Sin esto el worker falla en Macs limpias.
 import platform as _build_platform, shutil as _build_shutil
 if _build_platform.system() == "Windows":
+    _py_base = sys.base_prefix  # instalación REAL, no self.prefix (el venv)
+    _py_major, _py_minor = sys.version_info.major, sys.version_info.minor
+
+    _pyworker_bins = [
+        os.path.join(_py_base, "python.exe"),
+        os.path.join(_py_base, f"python{_py_major}.dll"),
+        os.path.join(_py_base, f"python{_py_major}{_py_minor}.dll"),
+    ]
+    _pyworker_ok = True
+    for _pf in _pyworker_bins:
+        if os.path.isfile(_pf):
+            binaries.append((_pf, "pyworker"))
+            print(f"\npyworker: incluido {_pf}")
+        else:
+            _pyworker_ok = False
+            print(f"\n⚠ WARNING: No se encontró {_pf} para el pyworker standalone.")
+
+    def _copy_pystdlib_for_pyworker(src_dir, dest_subdir):
+        """
+        Copia Lib/ o DLLs/ de la instalación BASE de Python (sys.base_prefix)
+        a _internal/pyworker/<dest_subdir>, excluyendo __pycache__ y paquetes
+        que el worker no necesita, para no inflar el tamaño del bundle.
+
+        CRÍTICO: excluir "site-packages" -- si la instalación base tiene
+        paquetes instalados globalmente (torch, etc. -- puede pasar si
+        alguna vez se corrió pip install fuera de un venv), site-packages
+        puede pesar VARIOS GB. El worker no lo necesita: los paquetes de
+        terceros (torch, core/, rvc/, ...) ya están en _internal/ (bundleados
+        aparte por PyInstaller) y el worker los encuentra ahí via sys.path
+        (ver el script embebido más abajo: sys.path.insert(0, base_dir)).
+        Aquí solo hace falta la librería estándar pura para que el
+        intérprete arranque.
+        """
+        if not os.path.isdir(src_dir):
+            print(f"\n⚠ WARNING: {src_dir} no existe -- el pyworker standalone puede fallar.")
+            return
+        count = 0
+        for root, dirs, files in os.walk(src_dir):
+            dirs[:] = [d for d in dirs if d not in
+                       ("__pycache__", "test", "tests", "idlelib", "tkinter",
+                        "site-packages", "turtledemo", "msilib", "ensurepip", "lib2to3")]
+            rel = os.path.relpath(root, src_dir)
+            dest_root = os.path.join("pyworker", dest_subdir)
+            dest_dir = dest_root if rel == "." else os.path.join(dest_root, rel)
+            for f in files:
+                datas.append((os.path.join(root, f), dest_dir))
+                count += 1
+        print(f"\npyworker: {count} archivos de {os.path.basename(src_dir)} incluidos en pyworker/{dest_subdir}/")
+
+    if _pyworker_ok:
+        _copy_pystdlib_for_pyworker(os.path.join(_py_base, "Lib"), "Lib")
+        _copy_pystdlib_for_pyworker(os.path.join(_py_base, "DLLs"), "DLLs")
+
+    # Se deja además el .exe suelto en _internal/ (comportamiento previo)
+    # como fallback si por algo pyworker/ no se armó bien -- ver paso 2b en
+    # _find_python_executable(). No soluciona el bug por sí solo, pero no
+    # hace daño tenerlo.
     _py_exe = _build_shutil.which("python.exe") or sys.executable
     if _py_exe and os.path.isfile(_py_exe):
         binaries.append((_py_exe, "."))
-        print(f"\npython.exe incluido en bundle: {_py_exe}")
-    else:
-        print("\n⚠ WARNING: No se encontró python.exe para incluir en el bundle.")
+        print(f"\npython.exe (fallback suelto) incluido en bundle: {_py_exe}")
 elif _build_platform.system() == "Darwin":
     _py_exe = _build_shutil.which("python3") or _build_shutil.which("python")
     if _py_exe and os.path.isfile(_py_exe):

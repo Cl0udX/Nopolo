@@ -45,8 +45,12 @@ def _find_python_executable() -> str:
 
     Estrategia de búsqueda en modo BUILD:
       1. Variable de entorno NOPOLO_PYTHON (permite override manual).
-      2. Python del venv detectado por PyInstaller (sys._MEIPASS/../../../bin/python).
-      3. 'python3' / 'python' en el PATH del sistema.
+      2. Python STANDALONE bundleado en _internal/pyworker/ (exe + Lib/ +
+         DLLs/ propios -- ver nopolo.spec). Es el único que funciona en una
+         máquina limpia sin Python instalado: no depende de pyvenv.cfg ni
+         de ninguna instalación externa.
+      3. Python del venv detectado por PyInstaller (sys._MEIPASS/../../../bin/python).
+      4. 'python3' / 'python' en el PATH del sistema.
     """
     from core.paths import get_run_mode
 
@@ -64,8 +68,24 @@ def _find_python_executable() -> str:
     meipass = getattr(sys, "_MEIPASS", None)
     bundled_ver = _detect_bundled_python_version(meipass) if meipass else ""
 
-    # 2. Buscar python ejecutable DENTRO de _internal/ (incluido explícitamente en el build)
-    #    Es la opción más segura: misma versión garantizada, no depende del sistema.
+    # 2. Python standalone en _internal/pyworker/ (ver nopolo.spec: se copia
+    #    ahí el Python REAL -- sys.base_prefix -- completo con su Lib/ y
+    #    DLLs/ propios, para que funcione sin pyvenv.cfg ni instalación
+    #    externa en la máquina del usuario final).
+    if meipass:
+        if _platform.system() == "Windows":
+            py_names = ("python.exe", "python3.exe")
+        else:
+            py_names = ("python3", "python")
+        for py_name in py_names:
+            candidate = os.path.join(meipass, "pyworker", py_name)
+            if os.path.isfile(candidate):
+                return candidate
+
+    # 2b. Fallback: python ejecutable suelto directo en _internal/ (builds
+    #     viejos que solo copiaban el .exe -- puede fallar con
+    #     "No pyvenv.cfg file" si vino de un venv, se deja como último
+    #     recurso antes de buscar fuera del bundle).
     if meipass:
         if _platform.system() == "Windows":
             py_names = ("python.exe", "python3.exe")
