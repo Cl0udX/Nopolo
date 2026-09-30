@@ -66,11 +66,32 @@ public class CPHInline
                         ? "🎙️ Voces disponibles: " + listaVoces
                         : "🎙️ No hay voces configuradas";
 
-                    // Mandarlo directo desde el C#. En esta versión de
-                    // Streamer.bot, SendMessage no devuelve nada (void), así
-                    // que no podemos leer si tuvo éxito -- solo lo llamamos.
+                    // CPH.SendMessage es específico de Twitch -- no detecta
+                    // sola la plataforma de origen del comando. Para que
+                    // funcione tanto si !list vino de Twitch como de
+                    // YouTube, mandamos el mensaje por las dos vías. Cada
+                    // una en su propio try/catch para que si una falla (o
+                    // no aplica, ej. no estás transmitiendo en esa
+                    // plataforma) no impida la otra.
                     CPH.LogInfo("[Listar Voces] Enviando al chat: " + mensajeChat);
-                    CPH.SendMessage(mensajeChat, false);
+
+                    try
+                    {
+                        CPH.SendMessage(mensajeChat, false);
+                    }
+                    catch (Exception ex)
+                    {
+                        CPH.LogWarn("[Listar Voces] No se pudo enviar por Twitch: " + ex.Message);
+                    }
+
+                    try
+                    {
+                        CPH.SendYouTubeMessage(mensajeChat, false);
+                    }
+                    catch (Exception ex)
+                    {
+                        CPH.LogWarn("[Listar Voces] No se pudo enviar por YouTube: " + ex.Message);
+                    }
                 }
                 return true;
             }
