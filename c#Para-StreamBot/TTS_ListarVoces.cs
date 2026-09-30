@@ -151,10 +151,21 @@ public class CPHInline
                 stream.Write(datos, 0, datos.Length);
                 stream.Flush();
 
-                // Leer respuesta
-                byte[] buffer = new byte[8192];
-                int bytesLeidos = stream.Read(buffer, 0, buffer.Length);
-                return Encoding.UTF8.GetString(buffer, 0, bytesLeidos);
+                // Leer respuesta completa. Un solo stream.Read() puede
+                // devolver solo una parte si el body todavía no llegó del
+                // todo -- como mandamos "Connection: close", el servidor
+                // cierra la conexión cuando termina, así que leemos en
+                // bucle hasta que Read() devuelva 0 (EOF real).
+                using (var memoria = new System.IO.MemoryStream())
+                {
+                    byte[] buffer = new byte[8192];
+                    int bytesLeidos;
+                    while ((bytesLeidos = stream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        memoria.Write(buffer, 0, bytesLeidos);
+                    }
+                    return Encoding.UTF8.GetString(memoria.ToArray());
+                }
             }
         }
         catch (SocketException)
